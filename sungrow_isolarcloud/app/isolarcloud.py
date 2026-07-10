@@ -2,18 +2,35 @@
 
 Auth model: every request carries the app's `x-access-key` header (secret key)
 plus `appkey` in the JSON body. A session token is obtained via /openapi/login
-with the iSolarCloud account credentials and passed as `token` in subsequent
-request bodies. On token expiry the client transparently re-logs-in once.
+with the iSolarCloud account credentials and sent as `token` HTTP header (and
+body field) on subsequent calls. On token expiry the client re-logs-in once.
+
+Encrypted mode: applications created recently in the developer portal require
+the "secured" protocol — the JSON body is AES-128-ECB encrypted with a random
+per-request key, that key travels RSA-encrypted in the `x-random-secret-key`
+header, the body carries an `api_key_param` (nonce + timestamp), and responses
+come back hex-encoded/AES-encrypted. Enabled by configuring the application's
+RSA public key.
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime
 from typing import Any
 
 import aiohttp
+
+from crypto_util import (
+    aes_decrypt_ecb_hex,
+    aes_encrypt_ecb_hex,
+    parse_rsa_public_key,
+    random_key,
+    random_nonce,
+    rsa_encrypt_pkcs1_b64,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -39,13 +56,17 @@ class ISolarCloudError(Exception):
 
 class ISolarCloudClient:
     def __init__(self, region: str, appkey: str, secret_key: str,
-                 username: str, password: str, lang: str = "_en_US"):
+                 username: str, password: str, lang: str = "_en_US",
+                 rsa_public_key: str = ""):
         self.base_url = GATEWAYS.get(region, GATEWAYS["eu"])
         self.appkey = appkey
         self.secret_key = secret_key
         self.username = username
         self.password = password
         self.lang = lang
+        self._rsa = parse_rsa_public_key(rsa_public_key) if rsa_public_key.strip() else None
+        if self._rsa:
+            _LOGGER.info("Encrypted OpenAPI mode enabled (RSA public key configured)")
         self._token: str | None = None
         self._token_ts: float = 0.0
         self._session: aiohttp.ClientSession | None = None
@@ -74,19 +95,50 @@ class ISolarCloudClient:
             **payload,
             "appkey": self.appkey,
             "lang": self.lang,
-            "sys_code": "901",
         }
         if with_token and self._token:
+            # the OpenAPI expects the session token as an HTTP header;
+            # keep it in the body too for older gateway revisions
+            headers["token"] = self._token
             body["token"] = self._token
-        async with session.post(f"{self.base_url}{path}", json=body, headers=headers) as resp:
+
+        aes_key: str | None = None
+        if self._rsa:
+            aes_key = random_key(16)
+            headers["x-random-secret-key"] = rsa_encrypt_pkcs1_b64(aes_key, *self._rsa)
+            body["api_key_param"] = {
+                "nonce": random_nonce(32),
+                "timestamp": str(int(time.time() * 1000)),
+            }
+            request_kwargs = {"data": aes_encrypt_ecb_hex(json.dumps(body), aes_key)}
+        else:
+            body["sys_code"] = "901"
+            request_kwargs = {"json": body}
+
+        async with session.post(f"{self.base_url}{path}", headers=headers, **request_kwargs) as resp:
+            text = await resp.text()
             if resp.status != 200:
-                text = await resp.text()
                 raise ISolarCloudError(str(resp.status), f"HTTP error: {text[:300]}", path)
-            data = await resp.json(content_type=None)
+        data = self._parse_response(text, aes_key, path)
         code = str(data.get("result_code", ""))
         if code != "1":
             raise ISolarCloudError(code or "unknown", str(data.get("result_msg", data))[:300], path)
         return data.get("result_data") or {}
+
+    @staticmethod
+    def _parse_response(text: str, aes_key: str | None, path: str) -> dict:
+        """Responses are plain JSON, or hex-encoded AES ciphertext in
+        encrypted mode (error responses may still be plain JSON)."""
+        stripped = text.strip()
+        if stripped.startswith("{"):
+            return json.loads(stripped)
+        if aes_key:
+            try:
+                return json.loads(aes_decrypt_ecb_hex(stripped, aes_key))
+            except (ValueError, json.JSONDecodeError) as err:
+                raise ISolarCloudError("decrypt_failed",
+                                       f"Could not decrypt response: {err}", path) from err
+        raise ISolarCloudError("bad_response", f"Unexpected response: {stripped[:200]}", path)
 
     async def login(self) -> dict:
         async with self._login_lock:

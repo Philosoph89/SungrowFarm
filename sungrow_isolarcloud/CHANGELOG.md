@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0 – 2026-07-10
+
+- **Fix:** Daten-Endpunkte antworteten mit `E900 Unauthorized access` –
+  das Session-Token wird jetzt zusätzlich als HTTP-Header gesendet.
+- **Neu:** Verschlüsselter API-Modus (AES-128 + RSA, `api_key_param`) für
+  neuere Developer-Portal-Anwendungen – aktivierbar über die neue Option
+  `rsa_public_key`. Implementiert in reinem Python, keine nativen
+  Abhängigkeiten (läuft auch auf armv7).
+
 ## 1.0.0 – 2026-07-10
 
 Erste Version 🎉

@@ -19,6 +19,7 @@ class Settings:
     secret_key: str = field(default_factory=lambda: os.getenv("SG_SECRET_KEY", ""))
     username: str = field(default_factory=lambda: os.getenv("SG_USERNAME", ""))
     password: str = field(default_factory=lambda: os.getenv("SG_PASSWORD", ""))
+    rsa_public_key: str = field(default_factory=lambda: os.getenv("SG_RSA_PUBLIC_KEY", ""))
     poll_interval: int = field(default_factory=lambda: int(os.getenv("SG_POLL_INTERVAL", "300")))
     language: str = field(default_factory=lambda: os.getenv("SG_LANGUAGE", "de"))
     demo_mode: bool = field(default_factory=lambda: _bool(os.getenv("SG_DEMO_MODE"), False))

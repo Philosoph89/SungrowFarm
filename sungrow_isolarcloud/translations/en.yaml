@@ -14,6 +14,12 @@ configuration:
   password:
     name: Password
     description: Your iSolarCloud password.
+  rsa_public_key:
+    name: RSA public key
+    description: >-
+      RSA public key of your application from the developer portal. Enables the
+      encrypted API mode – required when requests fail with error E900
+      ("Unauthorized access").
   poll_interval:
     name: Poll interval
     description: Seconds between cloud polls (the cloud only updates every ~5 min).

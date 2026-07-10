@@ -45,6 +45,7 @@ else:
         username=settings.username,
         password=settings.password,
         lang=settings.api_lang,
+        rsa_public_key=settings.rsa_public_key,
     )
 
 poller = Poller(client, store, mqtt)

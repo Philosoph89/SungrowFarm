@@ -27,6 +27,11 @@ einen **App-Key** und einen **Secret-Key** (x-access-key):
    - `secret_key` – der zugehörige Secret / Access Key
    - `username` / `password` – deine normalen iSolarCloud-Zugangsdaten
    - `region` – der Server, auf dem dein Konto liegt (für Deutschland/Europa: `eu`)
+   - `rsa_public_key` – der **RSA Public Key** deiner Anwendung (im Developer
+     Portal bei den Anwendungsdaten). Neuere Anwendungen verlangen den
+     verschlüsselten API-Modus; ohne den Key antworten die Daten-Endpunkte mit
+     Fehler **E900 „Unauthorized access“**. Den kompletten Base64-Block
+     (ohne `-----BEGIN…`-Zeilen, falls vorhanden) einfach einfügen.
 
 > **Tipp:** Ohne Zugangsdaten startet das Add-on im **Demo-Modus** mit simulierten
 > Daten – so kannst du dir die Oberfläche vorab ansehen.
@@ -40,6 +45,7 @@ einen **App-Key** und einen **Secret-Key** (x-access-key):
 | `secret_key` | Secret/Access Key aus dem Developer Portal |
 | `username` | iSolarCloud-Benutzername (E-Mail) |
 | `password` | iSolarCloud-Passwort |
+| `rsa_public_key` | RSA-Public-Key der Anwendung → aktiviert den verschlüsselten API-Modus (bei E900 nötig) |
 | `poll_interval` | Abfrage-Intervall in Sekunden (Standard 300 – die Cloud aktualisiert Werte nur alle ~5 min) |
 | `language` | Sprache der Sensornamen: `de` oder `en` |
 | `mqtt_enabled` | Sensoren per MQTT-Discovery anlegen (empfohlen) |
@@ -68,6 +74,9 @@ und können direkt im **Energie-Dashboard** von Home Assistant verwendet werden.
 
 ## Fehlerbehebung
 
+- **Fehler `E900 Unauthorized access` bei Datenabfragen (Login klappt):**
+  Deine Anwendung verlangt den verschlüsselten API-Modus. Trage den
+  `rsa_public_key` aus dem Developer Portal in den Optionen ein.
 - **„Fehler“ im Statuspunkt / Login schlägt fehl:** Prüfe Region, Appkey und
   Secret-Key. Der letzte API-Fehler wird im Tab **Status** im Klartext angezeigt
   (inkl. Sungrow-Fehlercode).
