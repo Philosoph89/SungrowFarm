@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0 – 2026-07-10
+
+- **Auto-Negotiation:** Der Client probiert beim Start automatisch alle
+  bekannten API-Varianten durch (klassische `/openapi/*`- vs. neue
+  `/openapi/platform/*`-Endpunkte, verschlüsselt/unverschlüsselt,
+  Token-Header vs. Bearer) und übernimmt die erste funktionierende.
+- **Verbindungs-Diagnose** im Status-Tab: testet alle Varianten und zeigt
+  den Sungrow-Fehlercode je Variante an.
+- **OAuth-Autorisierung:** Für Anwendungen, die die Konto-Freigabe über die
+  iSolarCloud-Weboberfläche verlangen (neue Option `app_id`,
+  Autorisierungs-Flow direkt im Status-Tab, Tokens werden persistiert).
+
 ## 1.1.0 – 2026-07-10
 
 - **Fix:** Daten-Endpunkte antworteten mit `E900 Unauthorized access` –

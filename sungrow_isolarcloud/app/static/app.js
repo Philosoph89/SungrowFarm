@@ -41,11 +41,20 @@ function fmtDateTime(ts) {
   if (!ts) return "–";
   return new Date(ts * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
-async function api(path) {
-  const r = await fetch(path, { cache: "no-store" });
-  if (!r.ok) throw new Error(`${path} → HTTP ${r.status}`);
+async function api(path, opts) {
+  const r = await fetch(path, { cache: "no-store", ...opts });
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).detail || ""; } catch { /* ignore */ }
+    throw new Error(detail || `${path} → HTTP ${r.status}`);
+  }
   return r.json();
 }
+const apiPost = (path, body) => api(path, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body || {}),
+});
 function toast(msg) {
   const t = $("#toast");
   t.textContent = msg;
@@ -438,6 +447,7 @@ const App = {
     this.dashChart = new TimeChart($("#dash-chart"), { unit: "W" });
     this.histChart = new TimeChart($("#hist-chart"), { unit: "W" });
     $("#point-search").addEventListener("input", () => this.renderPoints());
+    this.initDiagnostics();
     $$("#range-row .chip").forEach((c) => c.addEventListener("click", () => {
       $$("#range-row .chip").forEach((x) => x.classList.toggle("active", x === c));
       this.histHours = +c.dataset.hours;
@@ -652,17 +662,24 @@ const App = {
   },
 
   renderStatusView(s) {
-    const yesNo = (b, yes = "Ja", no = "Nein") => b ? yes : no;
     const items = [
       { k: "Verbindung", v: s.demo_mode ? "Demo-Modus" : (s.login_ok ? "Verbunden" : "Nicht verbunden"),
         dot: s.demo_mode ? "warn" : (s.login_ok ? "ok" : "err") },
       { k: "Region", v: { eu: "Europa", international: "International", china: "China", australia: "Australien" }[s.region] || s.region },
+      { k: "API-Variante", v: s.api_profile ? s.api_profile.label : "noch nicht ermittelt",
+        dot: s.api_profile ? "ok" : "" },
       { k: "MQTT-Sensoren", v: s.mqtt.enabled ? (s.mqtt.connected ? "Verbunden" : "Getrennt") : "Deaktiviert",
         dot: s.mqtt.enabled ? (s.mqtt.connected ? "ok" : "err") : "" },
       { k: "Letzte Aktualisierung", v: fmtDateTime(s.last_success) },
       { k: "Abfrage-Intervall", v: `${Math.round(s.poll_interval / 60)} min` },
-      { k: "Erfolgreiche Abfragen", v: nf0.format(s.poll_count) },
     ];
+    // OAuth card only makes sense when an Application ID is configured
+    $("#oauth-card").style.display = (!s.demo_mode && s.app_id_configured) ? "" : "none";
+    $("#diag-card").style.display = s.demo_mode ? "none" : "";
+    if (!this._negotiationShown && s.negotiation && s.negotiation.length && !s.api_profile) {
+      this.renderDiagTable(s.negotiation);
+      this._negotiationShown = true;
+    }
     $("#status-grid").innerHTML = items.map((it) => `
       <div class="card status-item">
         <div class="k">${it.k}</div>
@@ -673,6 +690,74 @@ const App = {
       ec.style.display = "";
       $("#error-pre").textContent = `${fmtDateTime(s.last_error_ts)}\n${s.last_error}`;
     } else ec.style.display = "none";
+  },
+
+  /* ---------------------------- diagnostics & OAuth ---------------------- */
+  initDiagnostics() {
+    const runBtn = $("#diag-run");
+    runBtn.addEventListener("click", async () => {
+      runBtn.disabled = true;
+      runBtn.textContent = "Diagnose läuft…";
+      $("#diag-result").innerHTML = "";
+      try {
+        const res = await apiPost("api/diagnose");
+        this.renderDiagTable(res.results);
+        if (res.results.some((r) => r.ok)) {
+          toast("Funktionierende API-Variante gefunden");
+          this.refresh();
+        }
+      } catch (err) {
+        $("#diag-result").innerHTML = `<p class="hint">Diagnose fehlgeschlagen: ${err.message}</p>`;
+      } finally {
+        runBtn.disabled = false;
+        runBtn.textContent = "Diagnose ausführen";
+      }
+    });
+
+    const redirect = $("#oauth-redirect");
+    redirect.value = localStorage.getItem("sgf-oauth-redirect") || "";
+    redirect.addEventListener("input", () =>
+      localStorage.setItem("sgf-oauth-redirect", redirect.value.trim()));
+    $("#oauth-open").addEventListener("click", async () => {
+      const uri = redirect.value.trim();
+      if (!uri) { $("#oauth-msg").textContent = "Bitte zuerst die Redirect-URL eintragen."; return; }
+      try {
+        const res = await api("api/oauth/url?redirect_uri=" + encodeURIComponent(uri));
+        window.open(res.url, "_blank");
+        $("#oauth-msg").textContent = "Autorisierungsseite geöffnet – nach der Freigabe die Weiterleitungs-URL unten einfügen.";
+      } catch (err) { $("#oauth-msg").textContent = err.message; }
+    });
+    $("#oauth-submit").addEventListener("click", async () => {
+      const code = $("#oauth-code").value.trim();
+      const uri = redirect.value.trim();
+      if (!code) { $("#oauth-msg").textContent = "Bitte Code oder Weiterleitungs-URL einfügen."; return; }
+      try {
+        await apiPost("api/oauth/code", { code, redirect_uri: uri });
+        $("#oauth-msg").textContent = "✓ Autorisierung erfolgreich – die Verbindung wird neu aufgebaut.";
+        toast("OAuth-Autorisierung erfolgreich");
+        this.refresh();
+      } catch (err) { $("#oauth-msg").textContent = "Fehler: " + err.message; }
+    });
+  },
+
+  renderDiagTable(results) {
+    if (!results || !results.length) {
+      $("#diag-result").innerHTML = `<p class="hint">Keine Ergebnisse.</p>`;
+      return;
+    }
+    const rows = results.map((r) => `
+      <tr>
+        <td>${r.profile.label}</td>
+        <td>${r.ok
+          ? `<span class="pill ok">OK</span>`
+          : `<span class="pill err">Fehler</span> <code>${r.code || "?"}</code>`}</td>
+        <td class="diag-detail">${(r.detail || "").replace(/</g, "&lt;")}${r.endpoint ? `<br><code>${r.endpoint}</code>` : ""}</td>
+      </tr>`).join("");
+    $("#diag-result").innerHTML = `
+      <table class="diag-table">
+        <thead><tr><th>Variante</th><th>Ergebnis</th><th>Details</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
   },
 };
 

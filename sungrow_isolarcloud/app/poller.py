@@ -54,12 +54,11 @@ class Poller:
         all_point_ids = list(PLANT_POINTS.keys())
         for plant in self.store.plants:
             ps_id = str(plant.get("ps_id"))
-            ps_key = self.client.plant_ps_key(ps_id)
             # the API caps point_id_list length per call → chunk requests
             rows: list[dict] = []
             for chunk in _chunks(all_point_ids, 10):
                 try:
-                    result = await self.client.get_realtime_points(11, [ps_key], chunk)
+                    result = await self.client.get_realtime_points(ps_id, chunk)
                     rows.extend(self.client.parse_point_rows(result))
                 except ISolarCloudError as err:
                     _LOGGER.warning("Realtime chunk failed for %s: %s", ps_id, err)

@@ -407,6 +407,38 @@ main { max-width: 1220px; margin: 0 auto; padding: 0 22px 48px; }
 .about { font-size: 13.5px; color: var(--ink-2); margin: 4px 0 0; max-width: 70ch; }
 #view-status .card { margin-bottom: 14px; }
 
+/* ------------------------------------------------------------ diagnosis --- */
+.diag-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.diag-table th {
+  text-align: left; font-size: 11.5px; font-weight: 650;
+  text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--grid-line);
+  white-space: nowrap;
+}
+.diag-table td { padding: 8px 10px; border-bottom: 1px solid var(--grid-line); vertical-align: top; }
+.diag-table tr:last-child td { border-bottom: none; }
+.diag-table code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; background: var(--surface-2);
+  border-radius: 5px; padding: 1px 6px;
+}
+.diag-detail { color: var(--muted); font-size: 12px; word-break: break-word; }
+
+.oauth-row { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.oauth-row input {
+  flex: 1; min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--ink);
+  font: inherit; font-size: 13px;
+  padding: 7px 14px;
+  outline: none;
+}
+.oauth-row input:focus { border-color: var(--c-grid); }
+
 /* ---------------------------------------------------------------- toast --- */
 .toast {
   position: fixed;

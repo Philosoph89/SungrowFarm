@@ -20,6 +20,12 @@ configuration:
       RSA public key of your application from the developer portal. Enables the
       encrypted API mode – required when requests fail with error E900
       ("Unauthorized access").
+  app_id:
+    name: Application ID
+    description: >-
+      Application ID of your app from the developer portal. Needed for the
+      account authorisation (OAuth) flow if the diagnosis finds no working
+      API variant.
   poll_interval:
     name: Poll interval
     description: Seconds between cloud polls (the cloud only updates every ~5 min).

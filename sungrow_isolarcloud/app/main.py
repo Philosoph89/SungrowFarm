@@ -6,13 +6,14 @@ Home Assistant ingress (/api/hassio_ingress/<token>/...).
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -31,6 +32,23 @@ STATIC_DIR = Path(__file__).parent / "static"
 store = Store(lang=settings.language)
 mqtt = MqttPublisher(store)
 
+_TOKEN_FILE = Path(settings.data_dir) / "oauth_tokens.json"
+
+
+def _token_store(tokens: dict | None) -> dict | None:
+    """load (None) / save (dict) persisted OAuth tokens."""
+    if tokens is None:
+        try:
+            return json.loads(_TOKEN_FILE.read_text())
+        except (OSError, ValueError):
+            return None
+    try:
+        _TOKEN_FILE.write_text(json.dumps(tokens))
+    except OSError as err:
+        _LOGGER.warning("Could not persist OAuth tokens: %s", err)
+    return tokens
+
+
 if settings.demo_mode or not settings.configured:
     from demo import DemoClient
     client = DemoClient()
@@ -46,6 +64,8 @@ else:
         password=settings.password,
         lang=settings.api_lang,
         rsa_public_key=settings.rsa_public_key,
+        app_id=settings.app_id,
+        token_store=_token_store,
     )
 
 poller = Poller(client, store, mqtt)
@@ -71,6 +91,7 @@ def _demo_active() -> bool:
 
 @app.get("/api/status")
 async def api_status():
+    profile = getattr(client, "profile", None)
     return {
         "configured": settings.configured,
         "demo_mode": _demo_active(),
@@ -84,7 +105,52 @@ async def api_status():
         "last_error_ts": store.last_error_ts,
         "poll_count": store.poll_count,
         "server_time": time.time(),
+        "api_profile": profile.as_dict() if profile else None,
+        "negotiation": getattr(client, "last_negotiation", []),
+        "rsa_configured": bool(settings.rsa_public_key.strip()),
+        "app_id_configured": bool(settings.app_id.strip()),
+        "has_oauth": getattr(client, "has_oauth", False),
     }
+
+
+@app.post("/api/diagnose")
+async def api_diagnose():
+    if _demo_active():
+        return {"results": [], "demo": True}
+    try:
+        results = await client.diagnose()
+    except Exception as err:  # noqa: BLE001
+        raise HTTPException(500, f"Diagnose fehlgeschlagen: {err}") from err
+    return {"results": results, "demo": False}
+
+
+@app.get("/api/oauth/url")
+async def api_oauth_url(redirect_uri: str):
+    if _demo_active():
+        raise HTTPException(400, "Demo-Modus aktiv")
+    if not settings.app_id.strip():
+        raise HTTPException(400, "app_id ist nicht konfiguriert (Add-on-Optionen)")
+    return {"url": client.oauth_authorize_url(redirect_uri)}
+
+
+@app.post("/api/oauth/code")
+async def api_oauth_code(payload: dict = Body(...)):
+    if _demo_active():
+        raise HTTPException(400, "Demo-Modus aktiv")
+    code = (payload.get("code") or "").strip()
+    redirect_uri = (payload.get("redirect_uri") or "").strip()
+    # allow pasting the full redirect URL instead of the bare code
+    if "code=" in code:
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(code).query)
+        code = (q.get("code") or [""])[0]
+    if not code:
+        raise HTTPException(400, "Kein Autorisierungs-Code angegeben")
+    try:
+        await client.oauth_exchange_code(code, redirect_uri)
+    except Exception as err:  # noqa: BLE001
+        raise HTTPException(502, str(err)) from err
+    return {"ok": True}
 
 
 @app.get("/api/plants")
@@ -144,7 +210,7 @@ async def api_history(
     start = end - timedelta(hours=hours)
     try:
         result = await client.get_minute_history(
-            [client.plant_ps_key(pid)], point_ids, start, end, minute_interval=interval)
+            pid, point_ids, start, end, minute_interval=interval)
     except ISolarCloudError as err:
         raise HTTPException(502, f"iSolarCloud: {err}") from err
 

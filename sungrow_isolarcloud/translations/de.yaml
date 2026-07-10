@@ -20,6 +20,12 @@ configuration:
       RSA-Public-Key deiner Anwendung aus dem Developer Portal. Aktiviert den
       verschlüsselten API-Modus – nötig, wenn Abfragen mit Fehler E900
       ("Unauthorized access") abgelehnt werden.
+  app_id:
+    name: Application ID
+    description: >-
+      Application ID deiner Anwendung aus dem Developer Portal. Wird für die
+      Konto-Autorisierung (OAuth) benötigt, falls die Diagnose keine
+      funktionierende API-Variante findet.
   poll_interval:
     name: Abfrage-Intervall
     description: Sekunden zwischen zwei Cloud-Abfragen (die Cloud aktualisiert nur alle ~5 min).

@@ -126,6 +126,37 @@
     <div class="card-head"><h2>Letzter Fehler</h2></div>
     <pre class="error-pre" id="error-pre"></pre>
   </div>
+
+  <div class="card" id="diag-card">
+    <div class="card-head wrap">
+      <h2>Verbindungs-Diagnose</h2>
+      <button class="chip" id="diag-run">Diagnose ausführen</button>
+    </div>
+    <p class="hint">Testet alle bekannten API-Varianten (klassisch/Platform ×
+      verschlüsselt/unverschlüsselt × Token-Übergabe) und zeigt den Sungrow-Fehlercode
+      je Variante. Die erste funktionierende Variante wird automatisch übernommen.</p>
+    <div class="table-wrap" id="diag-result"></div>
+  </div>
+
+  <div class="card" id="oauth-card" style="display:none">
+    <div class="card-head"><h2>Konto-Autorisierung (OAuth)</h2></div>
+    <p class="hint">Falls keine Variante funktioniert, verlangt deine Anwendung die
+      ausdrückliche Autorisierung deines iSolarCloud-Kontos. Ablauf:
+      <b>1.</b>&nbsp;Redirect-URL eintragen (muss der in deiner Anwendung im Developer
+      Portal hinterlegten entsprechen) und den Autorisierungs-Link öffnen.
+      <b>2.</b>&nbsp;Anmelden und die Anlage freigeben – du wirst weitergeleitet.
+      <b>3.</b>&nbsp;Die komplette Weiterleitungs-URL (enthält <code>?code=…</code>)
+      hier einfügen und bestätigen.</p>
+    <div class="oauth-row">
+      <input type="text" id="oauth-redirect" placeholder="Redirect-URL, z. B. https://meine-domain.de/callback">
+      <button class="chip" id="oauth-open">Autorisierungs-Link öffnen</button>
+    </div>
+    <div class="oauth-row">
+      <input type="text" id="oauth-code" placeholder="Weiterleitungs-URL oder Code einfügen…">
+      <button class="chip" id="oauth-submit">Code einlösen</button>
+    </div>
+    <p class="hint" id="oauth-msg"></p>
+  </div>
   <div class="card">
     <div class="card-head"><h2>Über dieses Add-on</h2></div>
     <p class="about">

@@ -75,8 +75,14 @@ und können direkt im **Energie-Dashboard** von Home Assistant verwendet werden.
 ## Fehlerbehebung
 
 - **Fehler `E900 Unauthorized access` bei Datenabfragen (Login klappt):**
-  Deine Anwendung verlangt den verschlüsselten API-Modus. Trage den
-  `rsa_public_key` aus dem Developer Portal in den Optionen ein.
+  Das Add-on probiert automatisch alle API-Varianten durch. Führe im Tab
+  **Status** die **Verbindungs-Diagnose** aus – sie zeigt pro Variante den
+  Sungrow-Fehlercode. Hilft das nicht, verlangt deine Anwendung vermutlich die
+  **Konto-Autorisierung (OAuth)**: Trage die `app_id` (Application ID aus dem
+  Developer Portal) in den Optionen ein und folge dem Autorisierungs-Ablauf im
+  Status-Tab. Prüfe außerdem im Developer Portal, ob deine Anwendung für die
+  benötigten APIs freigeschaltet ist (Menü „Applications“ → API-Liste /
+  Genehmigungsstatus).
 - **„Fehler“ im Statuspunkt / Login schlägt fehl:** Prüfe Region, Appkey und
   Secret-Key. Der letzte API-Fehler wird im Tab **Status** im Klartext angezeigt
   (inkl. Sungrow-Fehlercode).

@@ -142,7 +142,7 @@ class DemoClient:
              "type_name": "Data Logger", "factory_name": "Sungrow"},
         ]
 
-    async def get_realtime_points(self, device_type, ps_keys, point_ids) -> dict:
+    async def get_realtime_points(self, ps_id, point_ids) -> dict:
         now = datetime.now()
         f = _flows(now)
         e = _daily_energies(now)
@@ -179,7 +179,7 @@ class DemoClient:
                 point_map[f"p{pid}"] = round(values[str(pid)], 2)
         return {"device_point_list": [{"device_point": point_map}]}
 
-    async def get_minute_history(self, ps_keys, point_ids, start, end, minute_interval=5):
+    async def get_minute_history(self, ps_id, point_ids, start, end, minute_interval=5):
         rows = []
         t = start
         while t <= end:
