@@ -1,0 +1,184 @@
+"""FastAPI server: REST API for the dashboard + static frontend.
+
+All frontend URLs are relative so the app works both standalone and behind
+Home Assistant ingress (/api/hassio_ingress/<token>/...).
+"""
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from catalog import HISTORY_DEFAULT_POINTS, display_name, meta_for
+from config import settings
+from isolarcloud import ISolarCloudClient, ISolarCloudError
+from mqtt_publisher import MqttPublisher
+from poller import Poller
+from store import Store
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
+_LOGGER = logging.getLogger("sungrowfarm")
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+store = Store(lang=settings.language)
+mqtt = MqttPublisher(store)
+
+if settings.demo_mode or not settings.configured:
+    from demo import DemoClient
+    client = DemoClient()
+    if not settings.demo_mode and not settings.configured:
+        _LOGGER.warning("No credentials configured – running in demo mode. "
+                        "Set appkey/secret_key/username/password in the add-on options.")
+else:
+    client = ISolarCloudClient(
+        region=settings.region,
+        appkey=settings.appkey,
+        secret_key=settings.secret_key,
+        username=settings.username,
+        password=settings.password,
+        lang=settings.api_lang,
+    )
+
+poller = Poller(client, store, mqtt)
+_history_cache: dict[str, tuple[float, dict]] = {}
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    tasks = [asyncio.create_task(poller.run()), asyncio.create_task(mqtt.run())]
+    yield
+    for t in tasks:
+        t.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    await client.close()
+
+
+app = FastAPI(title="Sungrow iSolarCloud", lifespan=lifespan)
+
+
+def _demo_active() -> bool:
+    return settings.demo_mode or not settings.configured
+
+
+@app.get("/api/status")
+async def api_status():
+    return {
+        "configured": settings.configured,
+        "demo_mode": _demo_active(),
+        "region": settings.region,
+        "language": settings.language,
+        "poll_interval": settings.poll_interval,
+        "login_ok": store.login_ok,
+        "mqtt": {"enabled": settings.mqtt_enabled, "connected": store.mqtt_connected},
+        "last_success": store.last_success,
+        "last_error": store.last_error,
+        "last_error_ts": store.last_error_ts,
+        "poll_count": store.poll_count,
+        "server_time": time.time(),
+    }
+
+
+@app.get("/api/plants")
+async def api_plants():
+    return {"plants": store.plants}
+
+
+def _resolve_ps_id(ps_id: str | None) -> str:
+    if ps_id:
+        return str(ps_id)
+    if store.plants:
+        return str(store.plants[0].get("ps_id"))
+    raise HTTPException(503, "No plant data yet – waiting for first poll")
+
+
+@app.get("/api/overview")
+async def api_overview(ps_id: str | None = None):
+    pid = _resolve_ps_id(ps_id)
+    plant = next((p for p in store.plants if str(p.get("ps_id")) == pid), None)
+    return {
+        "ps_id": pid,
+        "plant": plant,
+        "kpis": store.overview(pid),
+        "updated": store.last_success,
+    }
+
+
+@app.get("/api/devices")
+async def api_devices(ps_id: str | None = None):
+    pid = _resolve_ps_id(ps_id)
+    return {"ps_id": pid, "devices": store.devices.get(pid, [])}
+
+
+@app.get("/api/points")
+async def api_points(ps_id: str | None = None):
+    pid = _resolve_ps_id(ps_id)
+    points = sorted(store.points.get(pid, {}).values(),
+                    key=lambda r: (r["group"], r["name"]))
+    return {"ps_id": pid, "points": points}
+
+
+@app.get("/api/history")
+async def api_history(
+    ps_id: str | None = None,
+    points: str = Query(default=",".join(HISTORY_DEFAULT_POINTS)),
+    hours: int = Query(default=24, ge=1, le=168),
+    interval: int = Query(default=5, ge=1, le=60),
+):
+    pid = _resolve_ps_id(ps_id)
+    point_ids = [p.strip() for p in points.split(",") if p.strip()]
+    cache_key = f"{pid}:{points}:{hours}:{interval}"
+    cached = _history_cache.get(cache_key)
+    if cached and time.time() - cached[0] < 240:
+        return cached[1]
+
+    end = datetime.now()
+    start = end - timedelta(hours=hours)
+    try:
+        result = await client.get_minute_history(
+            [client.plant_ps_key(pid)], point_ids, start, end, minute_interval=interval)
+    except ISolarCloudError as err:
+        raise HTTPException(502, f"iSolarCloud: {err}") from err
+
+    rows = client.parse_point_rows(result)
+    series: dict[str, dict] = {}
+    for row in rows:
+        pid_point = str(row["point_id"])
+        s = series.setdefault(pid_point, {
+            "point_id": pid_point,
+            "name": display_name(pid_point, settings.language),
+            "unit": (meta_for(pid_point).unit if meta_for(pid_point) else None),
+            "data": [],
+        })
+        ts = row.get("timestamp")
+        if ts and row["value"] is not None:
+            try:
+                t = datetime.strptime(str(ts), "%Y%m%d%H%M%S").timestamp()
+            except ValueError:
+                continue
+            s["data"].append([t, row["value"]])
+    for s in series.values():
+        s["data"].sort(key=lambda x: x[0])
+
+    payload = {"ps_id": pid, "series": list(series.values()),
+               "start": start.timestamp(), "end": end.timestamp()}
+    _history_cache[cache_key] = (time.time(), payload)
+    if len(_history_cache) > 50:
+        oldest = min(_history_cache, key=lambda k: _history_cache[k][0])
+        _history_cache.pop(oldest, None)
+    return payload
+
+
+@app.get("/")
+async def index():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")

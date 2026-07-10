@@ -1,0 +1,28 @@
+configuration:
+  region:
+    name: Region
+    description: iSolarCloud-Server, auf dem dein Konto liegt (Europa → eu).
+  appkey:
+    name: Appkey
+    description: Appkey deiner Anwendung aus dem Sungrow Developer Portal.
+  secret_key:
+    name: Secret Key
+    description: Secret / Access Key (x-access-key) deiner Anwendung.
+  username:
+    name: Benutzername
+    description: Deine iSolarCloud-Anmeldung (E-Mail-Adresse).
+  password:
+    name: Passwort
+    description: Dein iSolarCloud-Passwort.
+  poll_interval:
+    name: Abfrage-Intervall
+    description: Sekunden zwischen zwei Cloud-Abfragen (die Cloud aktualisiert nur alle ~5 min).
+  language:
+    name: Sprache
+    description: Sprache der Sensornamen und Anzeige.
+  mqtt_enabled:
+    name: MQTT-Sensoren
+    description: Alle Messwerte per MQTT-Discovery als Home-Assistant-Sensoren anlegen.
+  demo_mode:
+    name: Demo-Modus
+    description: Simulierte Daten anzeigen (keine Zugangsdaten nötig).

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Sungrow iSolarCloud</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='7' fill='%23eda100'/%3E%3Cg stroke='%23eda100' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M16 2v4M16 26v4M2 16h4M26 16h4M6.1 6.1l2.8 2.8M23.1 23.1l2.8 2.8M25.9 6.1l-2.8 2.8M8.9 23.1l-2.8 2.8'/%3E%3C/g%3E%3C/svg%3E">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <svg class="brand-icon" viewBox="0 0 32 32" aria-hidden="true">
+      <circle cx="16" cy="16" r="7" fill="var(--c-pv)"/>
+      <g stroke="var(--c-pv)" stroke-width="2.4" stroke-linecap="round">
+        <path d="M16 2v4M16 26v4M2 16h4M26 16h4M6.1 6.1l2.8 2.8M23.1 23.1l2.8 2.8M25.9 6.1l-2.8 2.8M8.9 23.1l-2.8 2.8"/>
+      </g>
+    </svg>
+    <div class="brand-text">
+      <span class="brand-name">SungrowFarm</span>
+      <span class="brand-plant" id="plant-name">–</span>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="conn-pill" id="conn-pill" title="">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span id="conn-label">…</span>
+    </span>
+    <button class="icon-btn" id="theme-toggle" title="Theme wechseln" aria-label="Theme wechseln">
+      <svg viewBox="0 0 24 24" class="icon-sun" aria-hidden="true"><circle cx="12" cy="12" r="4.6"/><g stroke-linecap="round"><path d="M12 2.5v2.6M12 18.9v2.6M2.5 12h2.6M18.9 12h2.6M5 5l1.8 1.8M17.2 17.2L19 19M19 5l-1.8 1.8M6.8 17.2L5 19"/></g></svg>
+      <svg viewBox="0 0 24 24" class="icon-moon" aria-hidden="true"><path d="M20.2 14.5A8.5 8.5 0 0 1 9.5 3.8 8.5 8.5 0 1 0 20.2 14.5Z"/></svg>
+    </button>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-tab="dashboard" role="tab">Dashboard</button>
+  <button class="tab" data-tab="history" role="tab">Verlauf</button>
+  <button class="tab" data-tab="devices" role="tab">Geräte</button>
+  <button class="tab" data-tab="points" role="tab">Parameter</button>
+  <button class="tab" data-tab="status" role="tab">Status</button>
+</nav>
+
+<main>
+
+<!-- ============================== DASHBOARD ============================= -->
+<section class="view active" id="view-dashboard">
+  <div class="demo-banner hidden" id="demo-banner">
+    <strong>Demo-Modus</strong> – es werden simulierte Daten angezeigt. Hinterlege deine
+    iSolarCloud-Zugangsdaten in den Add-on-Einstellungen, um deine Anlage zu sehen.
+  </div>
+
+  <div class="dash-grid">
+    <div class="card flow-card">
+      <div class="card-head">
+        <h2>Energiefluss</h2>
+        <span class="card-sub" id="flow-updated"></span>
+      </div>
+      <div class="flow-wrap" id="flow-wrap"><!-- SVG injected --></div>
+    </div>
+
+    <div class="kpi-grid" id="kpi-grid"><!-- KPI tiles injected --></div>
+  </div>
+
+  <div class="card chart-card">
+    <div class="card-head">
+      <h2>Leistung heute</h2>
+      <div class="legend" id="dash-legend"></div>
+    </div>
+    <div class="chart-holder"><canvas id="dash-chart"></canvas></div>
+  </div>
+</section>
+
+<!-- =============================== VERLAUF ============================== -->
+<section class="view" id="view-history">
+  <div class="card chart-card">
+    <div class="card-head wrap">
+      <h2>Verlauf</h2>
+      <div class="range-row" id="range-row">
+        <button class="chip" data-hours="12">12 h</button>
+        <button class="chip active" data-hours="24">24 h</button>
+        <button class="chip" data-hours="48">48 h</button>
+        <button class="chip" data-hours="168">7 Tage</button>
+      </div>
+    </div>
+    <div class="legend legend-lg" id="hist-legend"></div>
+    <div class="chart-holder tall"><canvas id="hist-chart"></canvas></div>
+    <p class="hint" id="hist-hint">Serien in der Legende lassen sich ein- und ausblenden.</p>
+  </div>
+</section>
+
+<!-- =============================== GERÄTE =============================== -->
+<section class="view" id="view-devices">
+  <div class="device-grid" id="device-grid"></div>
+</section>
+
+<!-- ============================== PARAMETER ============================= -->
+<section class="view" id="view-points">
+  <div class="card">
+    <div class="card-head wrap">
+      <h2>Alle Parameter</h2>
+      <div class="points-tools">
+        <div class="group-filter" id="group-filter"></div>
+        <input type="search" id="point-search" placeholder="Suchen…" aria-label="Parameter suchen">
+      </div>
+    </div>
+    <p class="hint">Jeder Parameter wird per MQTT-Discovery als Home-Assistant-Sensor
+      angelegt – Entity-ID anklicken zum Kopieren.</p>
+    <div class="table-wrap">
+      <table class="points-table" id="points-table">
+        <thead><tr>
+          <th>Parameter</th><th class="num">Wert</th><th>Entity-ID</th><th>MQTT-Topic</th><th class="num">Punkt-ID</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- =============================== STATUS =============================== -->
+<section class="view" id="view-status">
+  <div class="status-grid" id="status-grid"></div>
+  <div class="card" id="error-card" style="display:none">
+    <div class="card-head"><h2>Letzter Fehler</h2></div>
+    <pre class="error-pre" id="error-pre"></pre>
+  </div>
+  <div class="card">
+    <div class="card-head"><h2>Über dieses Add-on</h2></div>
+    <p class="about">
+      SungrowFarm verbindet dein <strong>Sungrow iSolarCloud</strong>-Konto über die offizielle
+      Developer-API (OpenAPI) mit Home Assistant. Alle Messwerte der Anlage werden zyklisch
+      abgerufen, hier visualisiert und per MQTT-Discovery als Sensoren bereitgestellt –
+      ideal für Automationen, das Energie-Dashboard und eigene Lovelace-Karten.
+      Die iSolarCloud aktualisiert Daten etwa alle 5&nbsp;Minuten; häufigeres Abfragen bringt keine neuen Werte.
+    </p>
+  </div>
+</section>
+
+</main>
+
+<div class="tooltip" id="tooltip" role="status" aria-hidden="true"></div>
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

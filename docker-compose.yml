@@ -1,0 +1,10 @@
+services:
+  sungrowfarm:
+    build:
+      context: ./sungrow_isolarcloud
+      dockerfile: Dockerfile.standalone
+    container_name: sungrowfarm
+    restart: unless-stopped
+    ports:
+      - "8099:8099"
+    env_file: .env
