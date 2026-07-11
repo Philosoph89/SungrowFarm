@@ -63,8 +63,13 @@ Sonnenstand am Anlagenstandort den PV-Ertrag für heute und die nächsten
 „Besser bis morgen warten“ – produziert die Anlage gerade Überschuss bei
 voller Batterie, heißt es „sofort einschalten“. API-Key anlegen:
 auf openweathermap.org registrieren → „API keys“ → Key kopieren →
-Add-on-Option `openweather_api_key` (der kostenlose Tarif reicht völlig,
-das Add-on fragt höchstens alle 30 Minuten ab).
+Add-on-Option `openweather_api_key`.
+
+Verwendet wird ausschließlich der **kostenlose 5-Tage/3-Stunden-Forecast**
+(`/data/2.5/forecast`) – kein One-Call-Abo, keine Hourly/Daily-APIs nötig.
+Das Add-on fragt höchstens alle 30 Minuten ab. Hinweis: Frisch erstellte
+OpenWeather-Keys sind oft erst nach 1–2 Stunden aktiv („Invalid API key“
+solange).
 
 ## MQTT-Sensoren
 

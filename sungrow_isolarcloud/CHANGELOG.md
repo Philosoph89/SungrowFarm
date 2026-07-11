@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.3.2 – 2026-07-11
+
+- **Fix: Solar-Planer-Karte fehlte** trotz API-Key. Zwei Ursachen behoben:
+  Frontend-Dateien werden jetzt mit Versions-Parameter geladen und die
+  Startseite mit `no-cache` ausgeliefert (Ingress/Browser hielten nach
+  Add-on-Updates altes JS im Cache), und die Karte blendet sich bei
+  Problemen nicht mehr still aus – ohne Key zeigt sie eine Einrichtungshilfe,
+  bei API-Fehlern die konkrete Fehlermeldung.
+- Add-on-Log zeigt beim Start, ob ein OpenWeather-Key ankommt
+  (maskiert, letzte 4 Zeichen).
+
+## 1.3.1 – 2026-07-11
+
+- Irreführende Startmeldung „Got unexpected response from the API: Service not
+  enabled“ unterdrückt – das war bashios interne Prüfung, ob ein MQTT-Dienst
+  existiert (kein OpenWeather-Fehler).
+- MQTT-Erkennung wartet beim Start jetzt bis zu 60 s auf Mosquitto (behebt
+  deaktivierte Sensoren, wenn das Add-on beim HA-Boot vor dem Broker startet).
+- Doku: Klarstellung, dass der Solar-Planer den kostenlosen
+  5-Tage/3-Stunden-Forecast nutzt (kein One-Call-Abo nötig).
+
 ## 1.3.0 – 2026-07-11
 
 - **Neu: Solar-Planer** 🌦️ – Empfehlung, ob stromintensive Geräte

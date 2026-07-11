@@ -471,21 +471,42 @@ const App = {
 
   async loadAdvisor() {
     const card = $("#advisor-card");
+    card.style.display = "";
     try {
       const a = await api("api/advisor");
-      if (!a.configured) { card.style.display = "none"; return; }
-      card.style.display = "";
+      if (!a.configured) {
+        $("#advisor-sub").textContent = "";
+        $("#advisor-body").innerHTML = `
+          <div class="advisor-verdict">
+            <span class="advisor-icon" style="background:var(--c-pv-soft)">${iconSvg("washer", "var(--c-pv)")}</span>
+            <div>
+              <div class="advisor-headline">Wann lohnt sich die Waschmaschine?</div>
+              <div class="advisor-message">Hinterlege einen kostenlosen
+                <b>OpenWeather API-Key</b> in den Add-on-Optionen
+                (<code>openweather_api_key</code>), dann empfiehlt dir SungrowFarm anhand
+                der Wetterprognose, ob stromintensive Geräte heute oder an einem
+                sonnigeren Tag laufen sollten.</div>
+              <div class="advisor-hint">Key anlegen auf openweathermap.org → „API keys“ –
+                der Gratis-Tarif (5-Tage/3-Stunden-Vorhersage) genügt.</div>
+            </div>
+          </div>`;
+        return;
+      }
       $("#advisor-sub").textContent = a.location?.city
         ? `Prognose für ${a.location.city}` : "";
       if (a.error) {
         $("#advisor-body").innerHTML =
-          `<p class="advisor-message">⚠️ ${a.error}</p>`;
+          `<p class="advisor-message">⚠️ ${String(a.error).replace(/</g, "&lt;")}</p>
+           <p class="advisor-hint">Hinweis: Frisch erstellte OpenWeather-Keys sind oft erst
+           nach 1–2 Stunden aktiv.</p>`;
         return;
       }
       this.renderAdvisor(a);
     } catch (err) {
       console.warn("advisor", err);
-      card.style.display = "none";
+      $("#advisor-sub").textContent = "";
+      $("#advisor-body").innerHTML =
+        `<p class="advisor-message">⚠️ Solar-Planer nicht erreichbar: ${err.message}</p>`;
     }
   },
 

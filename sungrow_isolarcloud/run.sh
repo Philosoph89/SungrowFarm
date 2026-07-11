@@ -19,16 +19,28 @@ export SG_LANGUAGE="$(bashio::config 'language')"
 export SG_DEMO_MODE="$(bashio::config 'demo_mode')"
 export SG_MQTT_ENABLED="$(bashio::config 'mqtt_enabled')"
 
-# Auto-discover the Home Assistant MQTT broker (Mosquitto add-on)
+# Auto-discover the Home Assistant MQTT broker (Mosquitto add-on).
+# stderr is silenced: bashio logs a scary "Got unexpected response from the
+# API: Service not enabled" ERROR when simply no MQTT service exists (yet).
+# Retry for a while – on HA boot this add-on may start before Mosquitto.
 if bashio::config.true 'mqtt_enabled'; then
-    if bashio::services.available 'mqtt'; then
+    mqtt_found=false
+    for _attempt in 1 2 3 4 5 6; do
+        if bashio::services.available 'mqtt' 2>/dev/null; then
+            mqtt_found=true
+            break
+        fi
+        [ "${_attempt}" = "1" ] && bashio::log.info "Waiting for the MQTT service (Mosquitto) …"
+        sleep 10
+    done
+    if [ "${mqtt_found}" = "true" ]; then
         export SG_MQTT_HOST="$(bashio::services 'mqtt' 'host')"
         export SG_MQTT_PORT="$(bashio::services 'mqtt' 'port')"
         export SG_MQTT_USER="$(bashio::services 'mqtt' 'username')"
         export SG_MQTT_PASSWORD="$(bashio::services 'mqtt' 'password')"
         bashio::log.info "MQTT broker discovered at ${SG_MQTT_HOST}:${SG_MQTT_PORT}"
     else
-        bashio::log.warning "MQTT service not available – sensors will not be published. Install the Mosquitto broker add-on."
+        bashio::log.warning "MQTT service not available – sensors will not be published. Install/start the Mosquitto broker add-on."
         export SG_MQTT_ENABLED="false"
     fi
 fi

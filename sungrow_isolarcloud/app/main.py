@@ -78,6 +78,11 @@ else:
     from advisor import SolarAdvisor
     advisor = SolarAdvisor(settings.openweather_api_key, store,
                            settings.latitude, settings.longitude)
+    if settings.openweather_api_key.strip():
+        _LOGGER.info("Solar planner enabled (OpenWeather key …%s)",
+                     settings.openweather_api_key.strip()[-4:])
+    else:
+        _LOGGER.info("Solar planner disabled – no OpenWeather API key configured")
 
 
 @asynccontextmanager
@@ -326,7 +331,10 @@ async def api_history(
 
 @app.get("/")
 async def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    # the HTML must never be cached – asset URLs carry the version and would
+    # otherwise point at stale JS/CSS after an add-on update (ingress caches)
+    return FileResponse(STATIC_DIR / "index.html",
+                        headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")
