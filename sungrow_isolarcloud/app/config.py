@@ -12,6 +12,13 @@ def _bool(v: str | None, default: bool = False) -> bool:
     return v.strip().lower() in ("1", "true", "yes", "on")
 
 
+def _float_or_none(v: str | None) -> float | None:
+    try:
+        return float(v.strip().replace(",", ".")) if v and v.strip() else None
+    except ValueError:
+        return None
+
+
 @dataclass
 class Settings:
     region: str = field(default_factory=lambda: os.getenv("SG_REGION", "eu"))
@@ -21,6 +28,9 @@ class Settings:
     password: str = field(default_factory=lambda: os.getenv("SG_PASSWORD", ""))
     rsa_public_key: str = field(default_factory=lambda: os.getenv("SG_RSA_PUBLIC_KEY", ""))
     app_id: str = field(default_factory=lambda: os.getenv("SG_APP_ID", ""))
+    openweather_api_key: str = field(default_factory=lambda: os.getenv("SG_OPENWEATHER_API_KEY", ""))
+    latitude: float | None = field(default_factory=lambda: _float_or_none(os.getenv("SG_LATITUDE")))
+    longitude: float | None = field(default_factory=lambda: _float_or_none(os.getenv("SG_LONGITUDE")))
     data_dir: str = field(default_factory=lambda: os.getenv(
         "SG_DATA_DIR", "/data" if os.path.isdir("/data") else "."))
     poll_interval: int = field(default_factory=lambda: int(os.getenv("SG_POLL_INTERVAL", "300")))

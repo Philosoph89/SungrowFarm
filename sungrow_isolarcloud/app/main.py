@@ -71,6 +71,14 @@ else:
 poller = Poller(client, store, mqtt)
 _history_cache: dict[str, tuple[float, dict]] = {}
 
+if settings.demo_mode or not settings.configured:
+    from advisor import DemoAdvisor
+    advisor = DemoAdvisor(store)
+else:
+    from advisor import SolarAdvisor
+    advisor = SolarAdvisor(settings.openweather_api_key, store,
+                           settings.latitude, settings.longitude)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,6 +88,7 @@ async def lifespan(app: FastAPI):
         t.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
     await client.close()
+    await advisor.close()
 
 
 app = FastAPI(title="Sungrow iSolarCloud", lifespan=lifespan)
@@ -111,6 +120,15 @@ async def api_status():
         "app_id_configured": bool(settings.app_id.strip()),
         "has_oauth": getattr(client, "has_oauth", False),
     }
+
+
+@app.get("/api/advisor")
+async def api_advisor():
+    try:
+        return await advisor.advise()
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Advisor failed: %s", err)
+        return {"configured": True, "error": str(err)}
 
 
 @app.post("/api/diagnose")

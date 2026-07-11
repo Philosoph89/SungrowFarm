@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.0 – 2026-07-11
+
+- **Neu: Solar-Planer** 🌦️ – Empfehlung, ob stromintensive Geräte
+  (Waschmaschine, Trockner, Spülmaschine, E-Auto) jetzt, heute oder besser an
+  einem sonnigeren Folgetag laufen sollten. Kombiniert die
+  OpenWeather-Vorhersage (3-Stunden-Raster, Bewölkung + Regenwahrscheinlichkeit)
+  mit einem Sonnenstandsmodell für den Anlagenstandort zu einer
+  PV-Ertragsprognose für heute + 3 Tage, inkl. bestem Tageszeitfenster.
+  Berücksichtigt den Live-Zustand: Läuft die Anlage gerade im Überschuss bei
+  gut geladener Batterie, lautet die Empfehlung „sofort einschalten“.
+  Neue Optionen: `openweather_api_key` (kostenloser Key von openweathermap.org),
+  optional `latitude`/`longitude` (sonst automatisch aus den Anlagendaten).
+
 ## 1.2.1 – 2026-07-11
 
 - **Batterie-Ladestand korrekt:** SOC-Punkte (83129/83252/83334) liefern je nach

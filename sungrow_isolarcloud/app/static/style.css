@@ -244,6 +244,59 @@ main { max-width: 1220px; margin: 0 auto; padding: 0 22px 48px; }
 }
 .meter > i { display: block; height: 100%; border-radius: 999px; transition: width .6s ease; }
 
+/* -------------------------------------------------------------- advisor --- */
+.advisor-card { margin-bottom: 14px; }
+.advisor-body { display: flex; gap: 22px; align-items: stretch; flex-wrap: wrap; }
+.advisor-verdict {
+  flex: 1 1 300px;
+  display: flex; gap: 14px; align-items: flex-start;
+  min-width: 260px;
+}
+.advisor-icon {
+  width: 48px; height: 48px; flex: none;
+  border-radius: 14px;
+  display: grid; place-items: center;
+}
+.advisor-icon svg { width: 26px; height: 26px; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.advisor-headline { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+.advisor-message { font-size: 13.5px; color: var(--ink-2); max-width: 46ch; }
+.advisor-hint { font-size: 12px; color: var(--muted); margin-top: 8px; }
+
+.advisor-days { display: flex; gap: 10px; flex: 1 1 340px; }
+.adv-day {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 8px 9px;
+  text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-width: 72px;
+  position: relative;
+}
+.adv-day.best { border-color: var(--c-pv); background: var(--c-pv-soft); }
+.adv-day .adv-label { font-size: 11.5px; font-weight: 650; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
+.adv-day.best .adv-label { color: var(--ink); }
+.adv-day svg { width: 26px; height: 26px; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.adv-day .adv-kwh { font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.adv-day .adv-pop { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.adv-meter {
+  width: 100%; height: 4px; border-radius: 999px;
+  background: var(--surface-2); overflow: hidden; margin-top: 3px;
+}
+.adv-meter > i { display: block; height: 100%; border-radius: 999px; background: var(--c-pv); }
+.adv-day .adv-badge {
+  position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+  font-size: 9.5px; font-weight: 750; letter-spacing: .05em; text-transform: uppercase;
+  background: var(--c-pv); color: #fff;
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap;
+}
+:root[data-theme="dark"] .adv-day .adv-badge { color: #1a1a19; }
+
+@media (max-width: 700px) {
+  .advisor-days { flex-wrap: wrap; }
+  .adv-day { min-width: calc(50% - 5px); }
+}
+
 /* --------------------------------------------------------------- chart --- */
 .chart-card { margin-bottom: 14px; }
 .chart-holder { position: relative; height: 260px; }

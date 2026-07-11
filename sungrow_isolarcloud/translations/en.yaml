@@ -26,6 +26,17 @@ configuration:
       Application ID of your app from the developer portal. Needed for the
       account authorisation (OAuth) flow if the diagnosis finds no working
       API variant.
+  openweather_api_key:
+    name: OpenWeather API key
+    description: >-
+      Free API key from openweathermap.org – enables the solar planner
+      (recommendation when to run energy-intensive appliances).
+  latitude:
+    name: Latitude (optional)
+    description: Location override for the weather forecast; defaults to the plant location.
+  longitude:
+    name: Longitude (optional)
+    description: Location override for the weather forecast; defaults to the plant location.
   poll_interval:
     name: Poll interval
     description: Seconds between cloud polls (the cloud only updates every ~5 min).

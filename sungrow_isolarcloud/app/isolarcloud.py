@@ -371,6 +371,16 @@ class ISolarCloudClient:
         prof = await self.ensure_profile()
         return await self._get_plants_with(prof)
 
+    async def get_plant_detail(self, ps_id: str | int) -> dict:
+        prof = await self.ensure_profile()
+        if prof.family == "openapi":
+            return await self._request("/openapi/getPowerStationDetail",
+                                       {"ps_id": str(ps_id)})
+        result = await self._request("/openapi/platform/getPowerStationDetail",
+                                     {"ps_ids": str(ps_id)})
+        data_list = result.get("data_list") or []
+        return data_list[0] if data_list else result
+
     async def get_devices(self, ps_id: str | int) -> list[dict]:
         prof = await self.ensure_profile()
         if prof.family == "openapi":

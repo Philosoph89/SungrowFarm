@@ -305,6 +305,15 @@ const ICONS = {
   bolt: '<path d="M13 2 5 13.5h5L11 22l8-11.5h-5L13 2z" stroke-linejoin="round"/>',
   leaf: '<path d="M6 15c0-6 5-10 13-11-1 8-5 13-11 13-1 0-2-.5-2-2z"/><path d="M5 20c2-4 5-7 9-9" stroke-linecap="round"/>',
   pct: '<circle cx="7.5" cy="7.5" r="2.6"/><circle cx="16.5" cy="16.5" r="2.6"/><path d="M18.5 5.5l-13 13" stroke-linecap="round"/>',
+  washer: '<rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="13.5" r="4.6"/><path d="M8.2 12.4c1.3 1 2.5 1 3.8 0s2.5-1 3.8 0"/><path d="M7 6.2h.01M10 6.2h.01"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  // weather icons
+  partly: '<circle cx="9" cy="9" r="3.4"/><path d="M9 2.6v1.8M2.6 9h1.8M4.5 4.5l1.3 1.3M13.5 4.5l-1.3 1.3"/><path d="M8 17.5a3.5 3.5 0 0 1 .5-6.96 4.5 4.5 0 0 1 8.7 1.1 3 3 0 0 1-.4 5.86H8z"/>',
+  cloud: '<path d="M7 18a4 4 0 0 1 .6-7.95 5 5 0 0 1 9.7 1.2A3.5 3.5 0 0 1 17 18H7z"/>',
+  rain: '<path d="M7 15a4 4 0 0 1 .6-7.95 5 5 0 0 1 9.7 1.2A3.5 3.5 0 0 1 17 15H7z"/><path d="M8.5 17.5 7.8 19.5M12.2 17.5l-.7 2M15.8 17.5l-.7 2"/>',
+  storm: '<path d="M7 14.5a4 4 0 0 1 .6-7.95 5 5 0 0 1 9.7 1.2A3.5 3.5 0 0 1 17 14.5H7z"/><path d="M12.6 15.5 10.5 19h2.6l-1.9 3" stroke-linejoin="round"/>',
+  snow: '<path d="M7 15a4 4 0 0 1 .6-7.95 5 5 0 0 1 9.7 1.2A3.5 3.5 0 0 1 17 15H7z"/><path d="M9 18h.01M12.5 19.5h.01M15.5 17.8h.01"/>',
+  fog: '<path d="M7 13a4 4 0 0 1 .6-7.95 5 5 0 0 1 9.7 1.2A3.5 3.5 0 0 1 17 13H7z"/><path d="M6 16.5h12M8 19.5h9"/>',
 };
 const iconSvg = (name, color) =>
   `<svg viewBox="0 0 24 24" style="stroke:${color}" aria-hidden="true">${ICONS[name] || ICONS.bolt}</svg>`;
@@ -454,9 +463,67 @@ const App = {
       this.loadHistory(true);
     }));
     await this.refresh();
-    await this.loadDashChart();
+    await Promise.all([this.loadDashChart(), this.loadAdvisor()]);
     setInterval(() => this.refresh(), 60_000);
     setInterval(() => this.loadDashChart(), 300_000);
+    setInterval(() => this.loadAdvisor(), 900_000);
+  },
+
+  async loadAdvisor() {
+    const card = $("#advisor-card");
+    try {
+      const a = await api("api/advisor");
+      if (!a.configured) { card.style.display = "none"; return; }
+      card.style.display = "";
+      $("#advisor-sub").textContent = a.location?.city
+        ? `Prognose für ${a.location.city}` : "";
+      if (a.error) {
+        $("#advisor-body").innerHTML =
+          `<p class="advisor-message">⚠️ ${a.error}</p>`;
+        return;
+      }
+      this.renderAdvisor(a);
+    } catch (err) {
+      console.warn("advisor", err);
+      card.style.display = "none";
+    }
+  },
+
+  renderAdvisor(a) {
+    const v = a.verdict;
+    const style = {
+      now:   { icon: "bolt",   c: "--c-batt", soft: "--c-batt-soft" },
+      today: { icon: "washer", c: "--c-pv",   soft: "--c-pv-soft" },
+      wait:  { icon: "clock",  c: "--c-grid", soft: "--c-grid-soft" },
+    }[v.type] || { icon: "washer", c: "--c-pv", soft: "--c-pv-soft" };
+
+    const dayTiles = a.days.map((d) => {
+      const isTarget = d.index === v.day_index;
+      const kwh = d.est_kwh != null
+        ? `${nf1.format(d.est_kwh)} <small>kWh</small>`
+        : `${d.rel} %`;
+      return `
+        <div class="adv-day${isTarget ? " best" : ""}" title="${d.window ? "Beste Zeit: " + d.window : ""}">
+          ${isTarget ? `<span class="adv-badge">${v.type === "wait" ? "Empfehlung" : "Heute"}</span>` : ""}
+          <span class="adv-label">${d.label}</span>
+          ${iconSvg(d.icon, d.icon === "sun" || d.icon === "partly" ? "var(--c-pv)" : "var(--muted)")}
+          <span class="adv-kwh">${kwh}</span>
+          <span class="adv-pop">${d.temp_max != null ? d.temp_max + "°" : ""}${d.pop > 15 ? ` · ${d.pop} %☂` : ""}</span>
+          <span class="adv-meter"><i style="width:${d.rel}%"></i></span>
+        </div>`;
+    }).join("");
+
+    $("#advisor-body").innerHTML = `
+      <div class="advisor-verdict">
+        <span class="advisor-icon" style="background:var(${style.soft})">${iconSvg(style.icon, `var(${style.c})`)}</span>
+        <div>
+          <div class="advisor-headline">${v.headline}</div>
+          <div class="advisor-message">${v.message}</div>
+          <div class="advisor-hint">Empfehlung für stromintensive Geräte (Waschmaschine, Trockner,
+            Spülmaschine, E-Auto) auf Basis der PV-Prognose${a.kwp ? ` deiner ${nf1.format(a.kwp)}-kWp-Anlage` : ""}.</div>
+        </div>
+      </div>
+      <div class="advisor-days">${dayTiles}</div>`;
   },
 
   redrawCharts() {

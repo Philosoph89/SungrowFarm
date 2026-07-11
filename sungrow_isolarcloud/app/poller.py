@@ -49,6 +49,12 @@ class Poller:
                     self.store.set_devices(ps_id, devices)
                 except ISolarCloudError as err:
                     _LOGGER.warning("Device list for %s failed: %s", ps_id, err)
+                try:
+                    detail = await self.client.get_plant_detail(ps_id)
+                    if isinstance(detail, dict) and detail:
+                        self.store.plant_details[ps_id] = detail
+                except ISolarCloudError as err:
+                    _LOGGER.debug("Plant detail for %s failed: %s", ps_id, err)
         self._cycle += 1
 
         all_point_ids = list(PLANT_POINTS.keys())

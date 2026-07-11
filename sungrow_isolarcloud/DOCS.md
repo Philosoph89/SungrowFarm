@@ -48,8 +48,23 @@ einen **App-Key** und einen **Secret-Key** (x-access-key):
 | `rsa_public_key` | RSA-Public-Key der Anwendung → aktiviert den verschlüsselten API-Modus (bei E900 nötig) |
 | `poll_interval` | Abfrage-Intervall in Sekunden (Standard 300 – die Cloud aktualisiert Werte nur alle ~5 min) |
 | `language` | Sprache der Sensornamen: `de` oder `en` |
+| `openweather_api_key` | Kostenloser API-Key von [openweathermap.org](https://openweathermap.org/api) → aktiviert den **Solar-Planer** |
+| `latitude` / `longitude` | Standort-Override für die Wetterprognose (sonst automatisch aus den Anlagendaten) |
 | `mqtt_enabled` | Sensoren per MQTT-Discovery anlegen (empfohlen) |
 | `demo_mode` | Erzwingt den Demo-Modus mit simulierten Daten |
+
+## Solar-Planer
+
+Mit einem (kostenlosen) OpenWeather-API-Key zeigt das Dashboard eine
+Empfehlung, wann stromintensive Geräte am besten laufen: Das Add-on schätzt
+aus der Wettervorhersage (Bewölkung, Regenwahrscheinlichkeit) und dem
+Sonnenstand am Anlagenstandort den PV-Ertrag für heute und die nächsten
+3 Tage. Regnet es heute und morgen scheint die Sonne, lautet die Empfehlung
+„Besser bis morgen warten“ – produziert die Anlage gerade Überschuss bei
+voller Batterie, heißt es „sofort einschalten“. API-Key anlegen:
+auf openweathermap.org registrieren → „API keys“ → Key kopieren →
+Add-on-Option `openweather_api_key` (der kostenlose Tarif reicht völlig,
+das Add-on fragt höchstens alle 30 Minuten ab).
 
 ## MQTT-Sensoren
 
