@@ -17,7 +17,7 @@ from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from catalog import HISTORY_DEFAULT_POINTS, display_name, meta_for
+from catalog import HISTORY_DEFAULT_POINTS, apply_transform, display_name, meta_for
 from config import settings
 from isolarcloud import ISolarCloudClient, ISolarCloudError
 from mqtt_publisher import MqttPublisher
@@ -185,11 +185,74 @@ async def api_devices(ps_id: str | None = None):
 
 
 @app.get("/api/points")
-async def api_points(ps_id: str | None = None):
+async def api_points(ps_id: str | None = None, include_empty: bool = False):
     pid = _resolve_ps_id(ps_id)
     points = sorted(store.points.get(pid, {}).values(),
                     key=lambda r: (r["group"], r["name"]))
+    if not include_empty:
+        # points the plant never delivers (utility-ESS-only, meteo station …)
+        # are noise in the browser and get no MQTT sensor either
+        points = [p for p in points if p["value"] is not None]
     return {"ps_id": pid, "points": points}
+
+
+# The minute-data endpoint rejects long time spans ("[010] query time interval
+# exceeds the maximum limit"). The allowed maximum is undocumented, so we learn
+# it: on a span error the window is halved (and remembered for future calls).
+_hist_max_span_s: float | None = None
+_HIST_MAX_REQUESTS = 24
+
+
+def _is_span_error(err: ISolarCloudError) -> bool:
+    msg = (err.message or "").lower()
+    return err.code == "010" and ("interval" in msg or "maximum" in msg or "limit" in msg)
+
+
+async def _fetch_history_chunked(pid: str, point_ids: list[str],
+                                 start: datetime, end: datetime,
+                                 interval: int) -> list[dict]:
+    global _hist_max_span_s
+    rows: list[dict] = []
+    requests_made = 0
+
+    async def fetch(s: datetime, e: datetime, depth: int = 0) -> None:
+        nonlocal requests_made
+        global _hist_max_span_s
+        if requests_made >= _HIST_MAX_REQUESTS:
+            _LOGGER.warning("History request budget exhausted – returning partial range")
+            return
+        # a sibling window may already have taught us the limit – split first
+        if (_hist_max_span_s and depth < 6
+                and (e - s).total_seconds() > _hist_max_span_s + 1):
+            mid = s + (e - s) / 2
+            await fetch(s, mid, depth + 1)
+            await fetch(mid, e, depth + 1)
+            return
+        requests_made += 1
+        try:
+            result = await client.get_minute_history(pid, point_ids, s, e,
+                                                     minute_interval=interval)
+            rows.extend(client.parse_point_rows(result))
+        except ISolarCloudError as err:
+            if _is_span_error(err) and depth < 6 and (e - s) > timedelta(hours=1):
+                _hist_max_span_s = (e - s).total_seconds() / 2
+                mid = s + (e - s) / 2
+                await fetch(s, mid, depth + 1)
+                await fetch(mid, e, depth + 1)
+            else:
+                raise
+
+    # pre-chunk with the learned limit, newest windows first
+    span = timedelta(seconds=_hist_max_span_s) if _hist_max_span_s else (end - start)
+    windows: list[tuple[datetime, datetime]] = []
+    w_end = end
+    while w_end > start:
+        w_start = max(start, w_end - span)
+        windows.append((w_start, w_end))
+        w_end = w_start
+    for w_start, w_end in windows:
+        await fetch(w_start, w_end)
+    return rows
 
 
 @app.get("/api/history")
@@ -209,12 +272,9 @@ async def api_history(
     end = datetime.now()
     start = end - timedelta(hours=hours)
     try:
-        result = await client.get_minute_history(
-            pid, point_ids, start, end, minute_interval=interval)
+        rows = await _fetch_history_chunked(pid, point_ids, start, end, interval)
     except ISolarCloudError as err:
         raise HTTPException(502, f"iSolarCloud: {err}") from err
-
-    rows = client.parse_point_rows(result)
     series: dict[str, dict] = {}
     for row in rows:
         pid_point = str(row["point_id"])
@@ -230,9 +290,12 @@ async def api_history(
                 t = datetime.strptime(str(ts), "%Y%m%d%H%M%S").timestamp()
             except ValueError:
                 continue
-            s["data"].append([t, row["value"]])
+            s["data"].append([t, apply_transform(meta_for(pid_point), row["value"])])
     for s in series.values():
         s["data"].sort(key=lambda x: x[0])
+        # chunked fetching can produce duplicate boundary samples
+        s["data"] = [d for i, d in enumerate(s["data"])
+                     if i == 0 or d[0] != s["data"][i - 1][0]]
 
     payload = {"ps_id": pid, "series": list(series.values()),
                "start": start.timestamp(), "end": end.timestamp()}

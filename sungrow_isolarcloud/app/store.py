@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from catalog import meta_for, display_name
+from catalog import apply_transform, meta_for, display_name
 
 
 class Store:
@@ -40,7 +40,7 @@ class Store:
                 "point_id": pid,
                 "code": meta.code if meta else f"point_{pid}",
                 "name": display_name(pid, self.lang),
-                "value": row.get("value"),
+                "value": apply_transform(meta, row.get("value")),
                 "unit": meta.unit if meta else None,
                 "device_class": meta.device_class if meta else None,
                 "state_class": meta.state_class if meta else None,
@@ -75,22 +75,37 @@ class Store:
         return None
 
     def overview(self, ps_id: str) -> dict:
-        """Computed KPI block for the dashboard energy-flow view."""
-        pv = self.first_value(ps_id, ["83033", "83067"]) or 0.0
-        load = self.first_value(ps_id, ["83106", "83052"]) or 0.0
-        grid = self.first_value(ps_id, ["83549"])
-        battery = self.first_value(ps_id, ["83238", "83046"])
-        soc = self.first_value(ps_id, ["83129", "83252"])
-        daily_yield = self.value(ps_id, "83022") or 0.0
+        """Computed KPI block for the dashboard energy-flow view.
+
+        Not every plant delivers every point (battery power in particular is
+        missing on many residential systems), so the flows fall back through
+        alternative points and finally to the power balance
+        pv + grid_import = load + grid_export + battery_charge.
+        """
+        pv = self.first_value(ps_id, ["83033", "83067", "83329", "83002"]) or 0.0
+        load = self.first_value(ps_id, ["83106", "83052", "83330"]) or 0.0
+        grid = self.first_value(ps_id, ["83549", "83032", "83328"])     # + import / − export
+        battery = self.first_value(ps_id, ["83238", "83046", "83326"])  # + charge / − discharge
+        soc = self.first_value(ps_id, ["83129", "83252", "83334"])
+
+        if battery is None and grid is not None:
+            battery = pv + grid - load
+        if grid is None:
+            if battery is None:
+                battery = 0.0
+            grid = load + battery - pv
+        if battery is None:
+            battery = 0.0
+        # deadband: measurement noise around zero must not animate the flow
+        if abs(battery) < 20:
+            battery = 0.0
+        if abs(grid) < 20:
+            grid = 0.0
+
+        daily_yield = self.first_value(ps_id, ["83022", "83331"]) or 0.0
         daily_load = self.value(ps_id, "83118")
         purchased_today = self.value(ps_id, "83102") or 0.0
         feed_in_today = self.first_value(ps_id, ["83072", "83119"]) or 0.0
-
-        if battery is None:
-            battery = 0.0
-        if grid is None:
-            # derive grid from the balance if the meter point is missing
-            grid = load - pv + battery
 
         self_sufficiency = None
         if daily_load and daily_load > 0:
@@ -109,9 +124,9 @@ class Store:
             "daily_load_wh": daily_load,
             "purchased_today_wh": purchased_today,
             "feed_in_today_wh": feed_in_today,
-            "daily_charge_wh": self.value(ps_id, "83243"),
-            "daily_discharge_wh": self.value(ps_id, "83244"),
-            "total_yield_wh": self.value(ps_id, "83024"),
+            "daily_charge_wh": self.first_value(ps_id, ["83243", "83322"]),
+            "daily_discharge_wh": self.first_value(ps_id, ["83244", "83323"]),
+            "total_yield_wh": self.first_value(ps_id, ["83024", "83332"]),
             "self_sufficiency": self_sufficiency,
             "self_consumption": self_consumption,
         }

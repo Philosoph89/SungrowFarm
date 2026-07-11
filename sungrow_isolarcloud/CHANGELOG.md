@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.1 – 2026-07-11
+
+- **Batterie-Ladestand korrekt:** SOC-Punkte (83129/83252/83334) liefern je nach
+  Konto einen Bruchteil 0–1 – wird jetzt automatisch auf Prozent skaliert
+  (Dashboard, Parameter, MQTT-Sensoren und Verlauf).
+- **Batterie-Richtung korrekt:** Liefert die Anlage keine Batterie-Leistung,
+  wird sie aus der Energiebilanz (PV + Netz − Haus) hergeleitet; zusätzliche
+  Fallback-Punkte (EMS-Reihe 83322–83334, Zähler 83032, Wechselrichter 83002).
+- **Verlauf repariert:** Die Minutendaten-API begrenzt die Zeitspanne pro
+  Abfrage – Abfragen werden jetzt automatisch in zulässige Fenster zerlegt
+  (das Limit wird beim ersten Fehler gelernt und gemerkt).
+- **Parameter-Browser:** Messpunkte, die die Anlage nicht liefert, werden
+  ausgeblendet (über `?include_empty=true` weiterhin abrufbar).
+
 ## 1.2.0 – 2026-07-10
 
 - **Auto-Negotiation:** Der Client probiert beim Start automatisch alle

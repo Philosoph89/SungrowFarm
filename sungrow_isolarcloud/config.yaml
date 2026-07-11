@@ -1,5 +1,5 @@
 name: Sungrow iSolarCloud
-version: 1.2.0
+version: 1.2.1
 slug: sungrow_isolarcloud
 description: Verbindet dein Sungrow iSolarCloud Konto mit Home Assistant – schönes Dashboard, alle Messwerte als Sensoren via MQTT.
 url: https://github.com/philippmueller/sungrowfarm

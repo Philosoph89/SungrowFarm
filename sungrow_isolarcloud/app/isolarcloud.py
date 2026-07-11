@@ -57,7 +57,9 @@ AUTH_WEB = {
     "australia": ("auweb3.isolarcloud.com", 7),
 }
 
-_TOKEN_ERROR_CODES = {"E00003", "010", "E900", "er_invalid_token", "er_token_login_invalid", "401"}
+# NOTE: "010" is a generic parameter/limit error, NOT a token problem –
+# treating it as one causes pointless re-login loops.
+_TOKEN_ERROR_CODES = {"E00003", "E900", "er_invalid_token", "er_token_login_invalid", "401"}
 _TS_FORMAT = "%Y%m%d%H%M%S"
 
 
