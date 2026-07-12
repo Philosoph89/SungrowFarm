@@ -108,6 +108,7 @@ class ISolarCloudClient:
         self._account_token: str | None = None
         self.profile: Profile | None = None
         self._device_rt_path: str | None = None
+        self._device_hist_path: str | None = None
         self.last_negotiation: list[dict] = []
         self._session: aiohttp.ClientSession | None = None
         self._auth_lock = asyncio.Lock()
@@ -455,6 +456,38 @@ class ISolarCloudClient:
         return await self._request("/openapi/platform/getPowerStationPointMinuteDataList", {
             "ps_id_list": [str(ps_id)], "points": points, "is_get_point_dict": "1", **common,
         })
+
+    async def get_device_minute_history(self, ps_key: str, point_ids: list[str],
+                                        start: datetime, end: datetime,
+                                        minute_interval: int = 5) -> dict:
+        """Minute history for device-level points (e.g. the ESS, 13xxx).
+        Endpoint path differs per API family – fall back and remember."""
+        await self.ensure_profile()
+        payload = {
+            "ps_key_list": [ps_key],
+            "points": ",".join(f"p{p}" for p in point_ids),
+            "start_time_stamp": start.strftime(_TS_FORMAT),
+            "end_time_stamp": end.strftime(_TS_FORMAT),
+            "minute_interval": str(minute_interval),
+        }
+        paths = ["/openapi/getDevicePointMinuteDataList",
+                 "/openapi/platform/getDevicePointMinuteDataList"]
+        if self.profile and self.profile.family == "platform":
+            paths.reverse()
+        if self._device_hist_path:
+            paths = [self._device_hist_path]
+        last_err: ISolarCloudError | None = None
+        for path in paths:
+            try:
+                result = await self._request(path, payload)
+                self._device_hist_path = path
+                return result
+            except ISolarCloudError as err:
+                last_err = err
+                if err.code == "010":   # span limit – path works, don't switch
+                    self._device_hist_path = path
+                    raise
+        raise last_err  # type: ignore[misc]
 
     @staticmethod
     def plant_ps_key(ps_id: str | int) -> str:

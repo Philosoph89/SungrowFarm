@@ -231,9 +231,9 @@ def _is_span_error(err: ISolarCloudError) -> bool:
     return err.code == "010" and ("interval" in msg or "maximum" in msg or "limit" in msg)
 
 
-async def _fetch_history_chunked(pid: str, point_ids: list[str],
-                                 start: datetime, end: datetime,
-                                 interval: int) -> list[dict]:
+async def _fetch_history_chunked(fetch_rows, start: datetime, end: datetime) -> list[dict]:
+    """Run `fetch_rows(s, e) -> list[rows]` over the range, splitting windows
+    that exceed the (learned) span limit."""
     global _hist_max_span_s
     rows: list[dict] = []
     requests_made = 0
@@ -253,9 +253,7 @@ async def _fetch_history_chunked(pid: str, point_ids: list[str],
             return
         requests_made += 1
         try:
-            result = await client.get_minute_history(pid, point_ids, s, e,
-                                                     minute_interval=interval)
-            rows.extend(client.parse_point_rows(result))
+            rows.extend(await fetch_rows(s, e))
         except ISolarCloudError as err:
             if _is_span_error(err) and depth < 6 and (e - s) > timedelta(hours=1):
                 _hist_max_span_s = (e - s).total_seconds() / 2
@@ -278,6 +276,26 @@ async def _fetch_history_chunked(pid: str, point_ids: list[str],
     return rows
 
 
+# Virtual chart series: signed grid/battery power. Which source feeds them
+# depends on what the plant delivers – plant-level point if it has live data,
+# otherwise composed from the ESS device points (positive − negative).
+VIRTUAL_SERIES = {
+    "grid": {"plant": "83549", "pos": "13149", "neg": "13121",
+             "name_de": "Netz", "name_en": "Grid"},
+    "battery": {"plant": "83238", "pos": "13126", "neg": "13150",
+                "name_de": "Batterie", "name_en": "Battery"},
+}
+
+
+def _combine_signed(pos: list, neg: list) -> list:
+    m: dict[float, float] = {}
+    for t, v in pos:
+        m[t] = m.get(t, 0.0) + v
+    for t, v in neg:
+        m[t] = m.get(t, 0.0) - v
+    return sorted([t, round(v, 1)] for t, v in m.items())
+
+
 @app.get("/api/history")
 async def api_history(
     ps_id: str | None = None,
@@ -286,41 +304,104 @@ async def api_history(
     interval: int = Query(default=5, ge=1, le=60),
 ):
     pid = _resolve_ps_id(ps_id)
-    point_ids = [p.strip() for p in points.split(",") if p.strip()]
+    requested = [p.strip() for p in points.split(",") if p.strip()]
     cache_key = f"{pid}:{points}:{hours}:{interval}"
     cached = _history_cache.get(cache_key)
     if cached and time.time() - cached[0] < 240:
         return cached[1]
 
+    # plan the fetches: which real points feed which requested series
+    plant_ids: list[str] = []
+    device_ids: list[str] = []
+    virtual_source: dict[str, tuple[str, dict]] = {}
+    for p in requested:
+        if p in VIRTUAL_SERIES:
+            v = VIRTUAL_SERIES[p]
+            if store.value(pid, v["plant"]) is not None:
+                plant_ids.append(v["plant"])
+                virtual_source[p] = ("plant", v)
+            else:
+                device_ids.extend([v["pos"], v["neg"]])
+                virtual_source[p] = ("device", v)
+        elif p.startswith("13"):
+            device_ids.append(p)
+        else:
+            plant_ids.append(p)
+
     end = datetime.now()
     start = end - timedelta(hours=hours)
+    rows: list[dict] = []
     try:
-        rows = await _fetch_history_chunked(pid, point_ids, start, end, interval)
+        if plant_ids:
+            async def fetch_plant(s, e):
+                result = await client.get_minute_history(
+                    pid, plant_ids, s, e, minute_interval=interval)
+                return client.parse_point_rows(result)
+            rows += await _fetch_history_chunked(fetch_plant, start, end)
     except ISolarCloudError as err:
         raise HTTPException(502, f"iSolarCloud: {err}") from err
-    series: dict[str, dict] = {}
+
+    bdev = store.battery_device.get(pid)
+    if device_ids and bdev and hasattr(client, "get_device_minute_history"):
+        try:
+            async def fetch_device(s, e):
+                result = await client.get_device_minute_history(
+                    bdev["ps_key"], device_ids, s, e, minute_interval=interval)
+                return client.parse_point_rows(result)
+            drows = await _fetch_history_chunked(fetch_device, start, end)
+            if (store.device_unit_mode or "kw") == "kw":
+                from poller import _DEVICE_ENERGY_IDS, _DEVICE_POWER_IDS
+                for r in drows:
+                    if (r["point_id"] in _DEVICE_POWER_IDS
+                            or r["point_id"] in _DEVICE_ENERGY_IDS) \
+                            and isinstance(r.get("value"), (int, float)):
+                        r["value"] = round(r["value"] * 1000.0, 1)
+            rows += drows
+        except ISolarCloudError as err:
+            _LOGGER.warning("Device history unavailable: %s", err)
+
+    # bucket rows by point id
+    data_by_point: dict[str, list] = {}
     for row in rows:
         pid_point = str(row["point_id"])
-        s = series.setdefault(pid_point, {
-            "point_id": pid_point,
-            "name": display_name(pid_point, settings.language),
-            "unit": (meta_for(pid_point).unit if meta_for(pid_point) else None),
-            "data": [],
-        })
         ts = row.get("timestamp")
-        if ts and row["value"] is not None:
-            try:
-                t = datetime.strptime(str(ts), "%Y%m%d%H%M%S").timestamp()
-            except ValueError:
-                continue
-            s["data"].append([t, apply_transform(meta_for(pid_point), row["value"])])
-    for s in series.values():
-        s["data"].sort(key=lambda x: x[0])
+        if not ts or row["value"] is None:
+            continue
+        try:
+            t = datetime.strptime(str(ts), "%Y%m%d%H%M%S").timestamp()
+        except ValueError:
+            continue
+        data_by_point.setdefault(pid_point, []).append(
+            [t, apply_transform(meta_for(pid_point), row["value"])])
+    for data in data_by_point.values():
+        data.sort(key=lambda x: x[0])
         # chunked fetching can produce duplicate boundary samples
-        s["data"] = [d for i, d in enumerate(s["data"])
-                     if i == 0 or d[0] != s["data"][i - 1][0]]
+        data[:] = [d for i, d in enumerate(data) if i == 0 or d[0] != data[i - 1][0]]
 
-    payload = {"ps_id": pid, "series": list(series.values()),
+    # assemble exactly the requested series (virtuals synthesised)
+    lang = settings.language
+    out_series = []
+    for p in requested:
+        if p in VIRTUAL_SERIES:
+            src_kind, v = virtual_source[p]
+            data = (data_by_point.get(v["plant"], []) if src_kind == "plant"
+                    else _combine_signed(data_by_point.get(v["pos"], []),
+                                         data_by_point.get(v["neg"], [])))
+            out_series.append({
+                "point_id": p,
+                "name": v["name_de"] if lang == "de" else v["name_en"],
+                "unit": "W",
+                "data": data,
+            })
+        else:
+            out_series.append({
+                "point_id": p,
+                "name": display_name(p, lang),
+                "unit": (meta_for(p).unit if meta_for(p) else None),
+                "data": data_by_point.get(p, []),
+            })
+
+    payload = {"ps_id": pid, "series": out_series,
                "start": start.timestamp(), "end": end.timestamp()}
     _history_cache[cache_key] = (time.time(), payload)
     if len(_history_cache) > 50:

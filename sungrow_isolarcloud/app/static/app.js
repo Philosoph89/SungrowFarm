@@ -636,11 +636,13 @@ const App = {
   },
 
   seriesDef() {
+    // "grid"/"battery" are virtual: the backend picks plant- or device-level
+    // sources depending on what the plant delivers
     return [
       { id: "83033", name: "Photovoltaik", cvar: "--c-pv", fill: true },
       { id: "83106", name: "Verbrauch", cvar: "--c-load" },
-      { id: "83549", name: "Netz", cvar: "--c-grid" },
-      { id: "83238", name: "Batterie", cvar: "--c-batt" },
+      { id: "grid", name: "Netz", cvar: "--c-grid" },
+      { id: "battery", name: "Batterie", cvar: "--c-batt" },
     ];
   },
 

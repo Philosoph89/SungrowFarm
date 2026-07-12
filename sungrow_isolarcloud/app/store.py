@@ -22,6 +22,8 @@ class Store:
         self.login_ok: bool = False
         # unit system of the device-level 13xxx points: "w" | "kw" | None
         self.device_unit_mode: str | None = None
+        # ps_id -> {"ps_key", "device_type"} of the device delivering 13xxx data
+        self.battery_device: dict[str, dict] = {}
 
     # ---------------------------------------------------------------- write
 

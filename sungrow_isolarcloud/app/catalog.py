@@ -137,8 +137,9 @@ FLOW_POINT_IDS = [
     "83022", "83102", "83072", "83118", "83243", "83244",
 ]
 
-# Sensible default set for history charts
-HISTORY_DEFAULT_POINTS = ["83033", "83106", "83549", "83238"]
+# Sensible default set for history charts ("grid"/"battery" are virtual
+# series resolved server-side from plant or device points, whichever exists)
+HISTORY_DEFAULT_POINTS = ["83033", "83106", "grid", "battery"]
 
 
 def meta_for(point_id: str) -> PointMeta | None:

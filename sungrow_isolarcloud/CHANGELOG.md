@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.5.0 – 2026-07-12
+
+- **Netz- und Batterie-Leistung in allen Charts** („Leistung heute“ und
+  Verlauf): Die Serien „Netz“ und „Batterie“ sind jetzt virtuell – das Backend
+  wählt automatisch die passende Quelle. Liefert die Anlage die Punkte 83549/
+  83238 nicht (typisch bei Heimanlagen), wird die Historie vom Speichergerät
+  geladen (Netz = Bezug − Einspeisung, Batterie = Ladung − Entladung,
+  Vorzeichen wie im Energiefluss: + Bezug/Laden, − Einspeisen/Entladen).
+- Geräte-Historie nutzt denselben Endpoint-Fallback und die
+  Einheiten-Erkennung wie die Echtzeitwerte.
+
 ## 1.4.1 – 2026-07-12
 
 - **Fix: Energiefluss-Zerlegung** – die Geräte-Punkte (13xxx) kommen je nach

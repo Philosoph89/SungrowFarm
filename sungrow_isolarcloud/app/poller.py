@@ -106,6 +106,9 @@ class Poller:
                 if rows:
                     self._normalize_device_units(ps_id, rows)
                     self.store.update_points(ps_id, rows)
+                    self.store.battery_device[ps_id] = {
+                        "ps_key": str(dev["ps_key"]), "device_type": dev_type,
+                    }
                     got_data = True
             if got_data:
                 return  # first device type that delivers data wins
