@@ -179,6 +179,41 @@ class DemoClient:
                 point_map[f"p{pid}"] = round(values[str(pid)], 2)
         return {"device_point_list": [{"device_point": point_map}]}
 
+    async def get_device_realtime(self, device_type, ps_key, point_ids) -> dict:
+        """Device-level (13xxx) points, in the native units the real API
+        uses: powers in kW, energies in kWh (transform scales them)."""
+        if device_type != 43:  # demo battery is the SBR128, device_type 43
+            from isolarcloud import ISolarCloudError
+            raise ISolarCloudError("E900", "demo: no such device type", "demo")
+        now = datetime.now()
+        f = _flows(now)
+        e = _daily_energies(now)
+        values = {
+            "13126": max(0.0, f["battery"]) / 1000.0,
+            "13150": max(0.0, -f["battery"]) / 1000.0,
+            "13141": f["soc"],
+            "13142": 98.0,
+            "13143": 21.5 + abs(f["battery"]) / 2500.0,
+            "13140": BATT_WH / 1000.0,
+            "13028": e["charge"] / 1000.0,
+            "13029": e["discharge"] / 1000.0,
+            "13034": 1900.0, "13035": 1760.0,
+            "13119": f["load"] / 1000.0,
+            "13121": max(0.0, -f["grid"]) / 1000.0,
+            "13149": max(0.0, f["grid"]) / 1000.0,
+            "13122": e["feed_in"] / 1000.0,
+            "13147": e["purchased"] / 1000.0,
+            "13003": f["pv"] / 1000.0,
+            "13011": f["pv"] / 1000.0 * 0.985,
+            "13112": e["yield"] / 1000.0,
+            "13199": e["load"] / 1000.0,
+        }
+        point_map = {"ps_key": ps_key, "device_time": now.strftime("%Y%m%d%H%M%S")}
+        for pid in point_ids:
+            if str(pid) in values:
+                point_map[f"p{pid}"] = round(values[str(pid)], 3)
+        return {"device_point_list": [{"device_point": point_map}]}
+
     async def get_minute_history(self, ps_id, point_ids, start, end, minute_interval=5):
         rows = []
         t = start

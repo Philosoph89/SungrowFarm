@@ -28,10 +28,20 @@ P = PointMeta
 
 
 def apply_transform(meta: "PointMeta | None", value):
-    """Normalise API values. SOC-style points arrive as a 0–1 fraction on some
-    accounts and as 0–100 on others – scale only when the value is ≤ 1."""
-    if meta and meta.transform == "fraction_pct" and isinstance(value, (int, float)):
+    """Normalise API values.
+
+    fraction_pct – SOC arrives as 0–1 fraction on some accounts, 0–100 on
+                   others: scale only when the value is ≤ 1.
+    kw_w / kwh_wh – device-level (13xxx) points are delivered in kW/kWh
+                   (per the GoSungrow point catalog); normalise to W/Wh so
+                   they combine with the plant-level points.
+    """
+    if meta is None or not isinstance(value, (int, float)):
+        return value
+    if meta.transform == "fraction_pct":
         return round(value * 100, 1) if value <= 1.0 else value
+    if meta.transform in ("kw_w", "kwh_wh"):
+        return round(value * 1000.0, 1)
     return value
 
 PLANT_POINTS: dict[str, PointMeta] = {p.point_id: p for p in [
@@ -90,6 +100,37 @@ PLANT_POINTS: dict[str, PointMeta] = {p.point_id: p for p in [
     P("83017", "module_temperature", "Modultemperatur", "Module Temperature", "°C", "temperature", "measurement", "mdi:thermometer-lines", "plant"),
 ]}
 
+# --- Device-level points (energy storage system, device_type 14) ----------
+# Point IDs and units taken from the GoSungrow point catalog (13xxx series).
+# Powers arrive in kW, energies in kWh → normalised to W/Wh via transform.
+DEVICE_BATTERY_POINTS: dict[str, PointMeta] = {p.point_id: p for p in [
+    P("13126", "battery_charging_power", "Batterie-Ladeleistung", "Battery Charging Power", "W", "power", "measurement", "mdi:battery-plus", "battery", transform="kw_w"),
+    P("13150", "battery_discharging_power", "Batterie-Entladeleistung", "Battery Discharging Power", "W", "power", "measurement", "mdi:battery-minus", "battery", transform="kw_w"),
+    P("13141", "battery_soc_device", "Batterie-Ladestand (Gerät)", "Battery SoC (device)", "%", "battery", "measurement", "mdi:battery-high", "battery", transform="fraction_pct"),
+    P("13142", "battery_soh", "Batterie-Gesundheit (SOH)", "Battery Health (SOH)", "%", None, "measurement", "mdi:battery-heart-variant", "battery", transform="fraction_pct"),
+    P("13143", "battery_temperature", "Batterie-Temperatur", "Battery Temperature", "°C", "temperature", "measurement", "mdi:thermometer", "battery"),
+    P("13140", "battery_capacity", "Batterie-Kapazität", "Battery Capacity", "Wh", "energy_storage", "measurement", "mdi:battery", "battery", transform="kwh_wh"),
+    P("13028", "daily_charge_device", "Ladung heute (Gerät)", "Daily Battery Charging Energy", "Wh", "energy", "total_increasing", "mdi:battery-plus-outline", "battery", transform="kwh_wh"),
+    P("13029", "daily_discharge_device", "Entladung heute (Gerät)", "Daily Battery Discharging Energy", "Wh", "energy", "total_increasing", "mdi:battery-minus-outline", "battery", transform="kwh_wh"),
+    P("13034", "total_charge_device", "Ladung gesamt (Gerät)", "Total Battery Charging Energy", "Wh", "energy", "total_increasing", "mdi:battery-plus-outline", "battery", transform="kwh_wh"),
+    P("13035", "total_discharge_device", "Entladung gesamt (Gerät)", "Total Battery Discharging Energy", "Wh", "energy", "total_increasing", "mdi:battery-minus-outline", "battery", transform="kwh_wh"),
+    P("13119", "load_power_device", "Hausverbrauch (Gerät)", "Total Load Active Power", "W", "power", "measurement", "mdi:home-lightning-bolt", "consumption", transform="kw_w"),
+    P("13199", "daily_load_device", "Tagesverbrauch (Gerät)", "Daily Load Energy Consumption", "Wh", "energy", "total_increasing", "mdi:home-battery", "consumption", transform="kwh_wh"),
+    P("13121", "export_power_device", "Einspeiseleistung (Gerät)", "Total Export Active Power", "W", "power", "measurement", "mdi:transmission-tower-export", "grid", transform="kw_w"),
+    P("13149", "purchased_power_device", "Netzbezugsleistung (Gerät)", "Purchased Power", "W", "power", "measurement", "mdi:transmission-tower-import", "grid", transform="kw_w"),
+    P("13122", "daily_feed_in_device", "Einspeisung heute (Gerät)", "Daily Feed-in Energy", "Wh", "energy", "total_increasing", "mdi:transmission-tower-export", "grid", transform="kwh_wh"),
+    P("13147", "daily_purchased_device", "Netzbezug heute (Gerät)", "Daily Purchased Energy", "Wh", "energy", "total_increasing", "mdi:transmission-tower-import", "grid", transform="kwh_wh"),
+    P("13003", "pv_power_device", "PV-Leistung (Gerät, DC)", "Total DC Power", "W", "power", "measurement", "mdi:solar-panel", "production", transform="kw_w"),
+    P("13011", "inverter_power_device", "Wechselrichter-Leistung (Gerät)", "Total Active Power", "W", "power", "measurement", "mdi:current-ac", "production", transform="kw_w"),
+    P("13112", "daily_pv_yield_device", "PV-Tagesertrag (Gerät)", "Daily PV Yield", "Wh", "energy", "total_increasing", "mdi:solar-power-variant", "production", transform="kwh_wh"),
+]}
+
+# device types that carry the 13xxx battery points (ESS first, then battery,
+# then hybrid inverter as a last resort – varies by plant setup)
+BATTERY_DEVICE_TYPES = (14, 43, 1)
+
+ALL_POINTS: dict[str, PointMeta] = {**PLANT_POINTS, **DEVICE_BATTERY_POINTS}
+
 # Points the dashboard needs for the energy-flow view (subset of the above)
 FLOW_POINT_IDS = [
     "83033", "83067", "83106", "83549", "83238", "83046", "83129", "83252",
@@ -101,7 +142,7 @@ HISTORY_DEFAULT_POINTS = ["83033", "83106", "83549", "83238"]
 
 
 def meta_for(point_id: str) -> PointMeta | None:
-    return PLANT_POINTS.get(str(point_id))
+    return ALL_POINTS.get(str(point_id))
 
 
 def display_name(point_id: str, lang: str, api_name: str | None = None) -> str:

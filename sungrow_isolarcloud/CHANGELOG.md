@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.4.0 – 2026-07-11
+
+- **Batterie-Fluss jetzt messbasiert:** Zusätzlich zu den Anlagen-Punkten
+  werden die Geräte-Punkte des Speichersystems abgefragt (13xxx-Reihe aus dem
+  GoSungrow-Katalog): Lade-/Entladeleistung (13126/13150), SOC/SOH/Temperatur,
+  Einspeise-/Bezugsleistung (13121/13149), Hausverbrauch (13119), PV-DC-Leistung
+  und Tages-/Gesamtenergien. Damit zeigt der Energiefluss PV→Batterie und
+  Batterie→Haus korrekt an, statt Überschüsse fälschlich dem Netz zuzuordnen.
+- Geräte-Leistungen (kW) und -Energien (kWh) werden automatisch auf W/Wh
+  normalisiert; alle neuen Messwerte erscheinen auch als MQTT-Sensoren
+  (u. a. `battery_charging_power`, `battery_soh`, `battery_temperature`).
+- Der Geräte-Endpunkt wird je API-Familie automatisch ermittelt
+  (platform/klassisch) und gemerkt; nicht verfügbare Gerätetypen werden
+  einmalig geloggt und übersprungen.
+- Update-Hinweis: Frontend-Cache wird dank v1.3.2 automatisch erneuert.
+
 ## 1.3.2 – 2026-07-11
 
 - **Fix: Solar-Planer-Karte fehlte** trotz API-Key. Zwei Ursachen behoben:

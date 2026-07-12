@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from catalog import PLANT_POINTS
+from catalog import BATTERY_DEVICE_TYPES, DEVICE_BATTERY_POINTS, PLANT_POINTS
 from config import settings
 from isolarcloud import ISolarCloudError
 from mqtt_publisher import MqttPublisher
@@ -23,6 +23,7 @@ class Poller:
         self.store = store
         self.mqtt = mqtt
         self._cycle = 0
+        self._device_poll_failed_types: set[tuple[str, int]] = set()
 
     async def run(self) -> None:
         while True:
@@ -70,7 +71,47 @@ class Poller:
                     _LOGGER.warning("Realtime chunk failed for %s: %s", ps_id, err)
             if rows:
                 self.store.update_points(ps_id, rows)
+            await self._poll_battery_devices(ps_id)
         await self.mqtt.publish_all()
+
+    async def _poll_battery_devices(self, ps_id: str) -> None:
+        """Device-level battery/grid/load points (13xxx) – residential plants
+        don't expose battery power at plant level, only on the ESS device."""
+        if not hasattr(self.client, "get_device_realtime"):
+            return
+        devices = self.store.devices.get(ps_id, [])
+        point_ids = list(DEVICE_BATTERY_POINTS.keys())
+        for dev_type in BATTERY_DEVICE_TYPES:
+            candidates = [d for d in devices
+                          if _to_int(d.get("device_type")) == dev_type and d.get("ps_key")]
+            got_data = False
+            for dev in candidates[:2]:
+                key = (ps_id, dev_type)
+                rows: list[dict] = []
+                try:
+                    for chunk in _chunks(point_ids, 10):
+                        result = await self.client.get_device_realtime(
+                            dev_type, str(dev["ps_key"]), chunk)
+                        rows.extend(self.client.parse_point_rows(result))
+                except ISolarCloudError as err:
+                    if key not in self._device_poll_failed_types:
+                        _LOGGER.info("Device points (type %s, %s) not available: %s",
+                                     dev_type, dev.get("device_name", "?"), err)
+                        self._device_poll_failed_types.add(key)
+                    continue
+                rows = [r for r in rows if r.get("value") is not None]
+                if rows:
+                    self.store.update_points(ps_id, rows)
+                    got_data = True
+            if got_data:
+                return  # first device type that delivers data wins
+
+
+def _to_int(v) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return -1
 
 
 def _chunks(items: list, n: int):

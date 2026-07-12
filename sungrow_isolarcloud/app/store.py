@@ -82,11 +82,23 @@ class Store:
         alternative points and finally to the power balance
         pv + grid_import = load + grid_export + battery_charge.
         """
-        pv = self.first_value(ps_id, ["83033", "83067", "83329", "83002"]) or 0.0
-        load = self.first_value(ps_id, ["83106", "83052", "83330"]) or 0.0
+        pv = self.first_value(ps_id, ["83033", "83067", "83329", "83002", "13003"]) or 0.0
+        load = self.first_value(ps_id, ["83106", "83052", "83330", "13119"]) or 0.0
         grid = self.first_value(ps_id, ["83549", "83032", "83328"])     # + import / − export
         battery = self.first_value(ps_id, ["83238", "83046", "83326"])  # + charge / − discharge
-        soc = self.first_value(ps_id, ["83129", "83252", "83334"])
+        soc = self.first_value(ps_id, ["83129", "83252", "83334", "13141"])
+
+        # measured device-level values (ESS, 13xxx) beat any derivation
+        if battery is None:
+            charge = self.value(ps_id, "13126")
+            discharge = self.value(ps_id, "13150")
+            if charge is not None or discharge is not None:
+                battery = (charge or 0.0) - (discharge or 0.0)
+        if grid is None:
+            imp = self.value(ps_id, "13149")
+            exp = self.value(ps_id, "13121")
+            if imp is not None or exp is not None:
+                grid = (imp or 0.0) - (exp or 0.0)
 
         if battery is None and grid is not None:
             battery = pv + grid - load
@@ -102,10 +114,10 @@ class Store:
         if abs(grid) < 20:
             grid = 0.0
 
-        daily_yield = self.first_value(ps_id, ["83022", "83331"]) or 0.0
-        daily_load = self.value(ps_id, "83118")
-        purchased_today = self.value(ps_id, "83102") or 0.0
-        feed_in_today = self.first_value(ps_id, ["83072", "83119"]) or 0.0
+        daily_yield = self.first_value(ps_id, ["83022", "83331", "13112"]) or 0.0
+        daily_load = self.first_value(ps_id, ["83118", "13199"])
+        purchased_today = self.first_value(ps_id, ["83102", "13147"]) or 0.0
+        feed_in_today = self.first_value(ps_id, ["83072", "83119", "13122"]) or 0.0
 
         self_sufficiency = None
         if daily_load and daily_load > 0:
@@ -124,8 +136,8 @@ class Store:
             "daily_load_wh": daily_load,
             "purchased_today_wh": purchased_today,
             "feed_in_today_wh": feed_in_today,
-            "daily_charge_wh": self.first_value(ps_id, ["83243", "83322"]),
-            "daily_discharge_wh": self.first_value(ps_id, ["83244", "83323"]),
+            "daily_charge_wh": self.first_value(ps_id, ["83243", "83322", "13028"]),
+            "daily_discharge_wh": self.first_value(ps_id, ["83244", "83323", "13029"]),
             "total_yield_wh": self.first_value(ps_id, ["83024", "83332"]),
             "self_sufficiency": self_sufficiency,
             "self_consumption": self_consumption,

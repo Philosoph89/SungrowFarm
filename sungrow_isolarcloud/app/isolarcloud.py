@@ -107,6 +107,7 @@ class ISolarCloudClient:
         self._oauth: dict | None = token_store(None) if token_store else None
         self._account_token: str | None = None
         self.profile: Profile | None = None
+        self._device_rt_path: str | None = None
         self.last_negotiation: list[dict] = []
         self._session: aiohttp.ClientSession | None = None
         self._auth_lock = asyncio.Lock()
@@ -390,6 +391,37 @@ class ISolarCloudClient:
             result = await self._request("/openapi/platform/getDeviceListByPsId",
                                          {"ps_id": str(ps_id), "page": 1, "size": 200})
         return result.get("pageList") or []
+
+    async def get_device_realtime(self, device_type: int, ps_key: str,
+                                  point_ids: list[str]) -> dict:
+        """Real-time values for points on a specific device (e.g. the energy
+        storage system, device_type 14, 13xxx points).
+
+        The endpoint path differs between API families and not every account
+        has both – try the family-native path first, then the other, and
+        remember what worked.
+        """
+        prof = await self.ensure_profile()
+        payload = {
+            "device_type": device_type,
+            "point_id_list": [str(p) for p in point_ids],
+            "ps_key_list": [ps_key],
+        }
+        paths = ["/openapi/getDeviceRealTimeData",
+                 "/openapi/platform/getDeviceRealTimeData"]
+        if prof.family == "platform":
+            paths.reverse()
+        if self._device_rt_path:
+            paths = [self._device_rt_path]
+        last_err: ISolarCloudError | None = None
+        for path in paths:
+            try:
+                result = await self._request(path, payload)
+                self._device_rt_path = path
+                return result
+            except ISolarCloudError as err:
+                last_err = err
+        raise last_err  # type: ignore[misc]
 
     async def get_realtime_points(self, ps_id: str | int, point_ids: list[str]) -> dict:
         """Plant-level (device_type 11) real-time values."""
