@@ -20,6 +20,8 @@ class Store:
         self.poll_count: int = 0
         self.mqtt_connected: bool = False
         self.login_ok: bool = False
+        # unit system of the device-level 13xxx points: "w" | "kw" | None
+        self.device_unit_mode: str | None = None
 
     # ---------------------------------------------------------------- write
 

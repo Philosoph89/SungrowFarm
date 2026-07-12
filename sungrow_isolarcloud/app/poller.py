@@ -6,6 +6,9 @@ import asyncio
 import logging
 
 from catalog import BATTERY_DEVICE_TYPES, DEVICE_BATTERY_POINTS, PLANT_POINTS
+
+_DEVICE_POWER_IDS = {pid for pid, m in DEVICE_BATTERY_POINTS.items() if m.transform == "kw_w"}
+_DEVICE_ENERGY_IDS = {pid for pid, m in DEVICE_BATTERY_POINTS.items() if m.transform == "kwh_wh"}
 from config import settings
 from isolarcloud import ISolarCloudError
 from mqtt_publisher import MqttPublisher
@@ -101,10 +104,52 @@ class Poller:
                     continue
                 rows = [r for r in rows if r.get("value") is not None]
                 if rows:
+                    self._normalize_device_units(ps_id, rows)
                     self.store.update_points(ps_id, rows)
                     got_data = True
             if got_data:
                 return  # first device type that delivers data wins
+
+    def _normalize_device_units(self, ps_id: str, rows: list[dict]) -> None:
+        """The gateway delivers 13xxx device points either in kW/kWh (as in
+        the GoSungrow catalog) or already in W/Wh, depending on the account.
+        Detect which and scale kW/kWh → W/Wh so everything is consistent."""
+        detected = self._detect_device_units(ps_id, rows)
+        if detected == "w" and self.store.device_unit_mode != "w":
+            _LOGGER.info("Device points are delivered in W/Wh – no scaling applied")
+            self.store.device_unit_mode = "w"
+        elif detected == "kw" and self.store.device_unit_mode is None:
+            _LOGGER.info("Device points are delivered in kW/kWh – scaling to W/Wh")
+            self.store.device_unit_mode = "kw"
+        # undecided → assume kW (the documented unit) without persisting
+        if (self.store.device_unit_mode or "kw") == "kw":
+            for r in rows:
+                if (r["point_id"] in _DEVICE_POWER_IDS or r["point_id"] in _DEVICE_ENERGY_IDS) \
+                        and isinstance(r.get("value"), (int, float)):
+                    r["value"] = round(r["value"] * 1000.0, 1)
+
+    def _detect_device_units(self, ps_id: str, rows: list[dict]) -> str | None:
+        raw = {r["point_id"]: r["value"] for r in rows
+               if isinstance(r.get("value"), (int, float))}
+        # strongest signal: device load vs. plant load measure the same thing
+        plant_load = self.store.first_value(ps_id, ["83106", "83052"])
+        load_raw = raw.get("13119")
+        if plant_load and load_raw and load_raw > 0.05:
+            ratio = plant_load / load_raw
+            if 0.2 < ratio < 5:
+                return "w"
+            if ratio > 200:
+                return "kw"
+        # a residential power > 300 kW is impossible → must be W
+        if any(abs(raw[p]) > 300 for p in _DEVICE_POWER_IDS & raw.keys()):
+            return "w"
+        # lifetime counters > 50 000 kWh are equally implausible → Wh
+        if any(raw[p] > 50_000 for p in ("13034", "13035") if p in raw):
+            return "w"
+        if any(raw[p] > 1_500 for p in
+               ("13028", "13029", "13122", "13147", "13112", "13199") if p in raw):
+            return "w"
+        return None
 
 
 def _to_int(v) -> int:

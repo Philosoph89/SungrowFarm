@@ -32,16 +32,16 @@ def apply_transform(meta: "PointMeta | None", value):
 
     fraction_pct – SOC arrives as 0–1 fraction on some accounts, 0–100 on
                    others: scale only when the value is ≤ 1.
-    kw_w / kwh_wh – device-level (13xxx) points are delivered in kW/kWh
-                   (per the GoSungrow point catalog); normalise to W/Wh so
-                   they combine with the plant-level points.
+
+    Note: the kw_w/kwh_wh transform tags on device points are NOT applied
+    here – whether the gateway delivers those points in kW/kWh (GoSungrow's
+    channel) or already in W/Wh varies by account, so the poller detects the
+    unit system per plant and scales before the values reach the store.
     """
     if meta is None or not isinstance(value, (int, float)):
         return value
     if meta.transform == "fraction_pct":
         return round(value * 100, 1) if value <= 1.0 else value
-    if meta.transform in ("kw_w", "kwh_wh"):
-        return round(value * 1000.0, 1)
     return value
 
 PLANT_POINTS: dict[str, PointMeta] = {p.point_id: p for p in [

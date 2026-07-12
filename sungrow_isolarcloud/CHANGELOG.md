@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.1 – 2026-07-12
+
+- **Fix: Energiefluss-Zerlegung** – die Geräte-Punkte (13xxx) kommen je nach
+  Konto in kW/kWh **oder bereits in W/Wh**. Die pauschale kW→W-Umrechnung aus
+  1.4.0 blähte bei W-Konten die Netz-/Batterie-Leistungen um Faktor 1000 auf,
+  wodurch das Diagramm die gesamte PV dem Netz zuordnete und PV→Haus leer
+  blieb. Das Einheitensystem wird jetzt pro Anlage automatisch erkannt
+  (Abgleich Geräte-Last ↔ Anlagen-Last, Plausibilitätsgrenzen) und gemerkt.
+
 ## 1.4.0 – 2026-07-11
 
 - **Batterie-Fluss jetzt messbasiert:** Zusätzlich zu den Anlagen-Punkten
