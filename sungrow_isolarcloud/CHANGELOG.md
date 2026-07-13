@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.6.0 – 2026-07-12
+
+- **Solar-Planer 2.0** – deutlich genauere Prognose:
+  - Haurwitz-Klarhimmelmodell (Luftmassen-Dämpfung) statt reinem Sonnenstand
+  - „Heute“ = real erzeugte kWh (Zählerstand) + Rest-Prognose ab jetzt;
+    Anzeige von Sonnenuntergang, verbleibenden Sonnenstunden und
+    Rest-Erzeugung
+  - **Nowcasting:** die Live-Leistung der Anlage korrigiert die Prognose der
+    nächsten ~3 Stunden (Ist/Modell-Verhältnis, abklingend)
+  - **Selbstkalibrierung:** laufender Abgleich Modell ↔ reale Erzeugung lernt
+    einen Anlagenfaktor (Ausrichtung, Verschattung, Verluste) – persistiert
+  - **Überschuss-Logik:** reicht die Rest-Erzeugung für Restverbrauch +
+    Batterieladung + Gerät (≥ 2,5 kWh Puffer), lautet die Empfehlung „heute“,
+    selbst wenn morgen sonniger wird – warten brächte nichts
+  - Kontext-Chips in der Karte (Rest-Sonne, Rest-Erzeugung, Überschuss,
+    Kalibrierfaktor)
+
 ## 1.5.0 – 2026-07-12
 
 - **Netz- und Batterie-Leistung in allen Charts** („Leistung heute“ und

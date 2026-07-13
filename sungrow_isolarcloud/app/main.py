@@ -77,7 +77,8 @@ if settings.demo_mode or not settings.configured:
 else:
     from advisor import SolarAdvisor
     advisor = SolarAdvisor(settings.openweather_api_key, store,
-                           settings.latitude, settings.longitude)
+                           settings.latitude, settings.longitude,
+                           state_path=Path(settings.data_dir) / "advisor_state.json")
     if settings.openweather_api_key.strip():
         _LOGGER.info("Solar planner enabled (OpenWeather key …%s)",
                      settings.openweather_api_key.strip()[-4:])

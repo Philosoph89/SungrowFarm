@@ -523,16 +523,32 @@ const App = {
       const kwh = d.est_kwh != null
         ? `${nf1.format(d.est_kwh)} <small>kWh</small>`
         : `${d.rel} %`;
+      const todaySplit = d.index === 0 && d.remaining_kwh != null
+        ? `<span class="adv-split">noch ${nf1.format(d.remaining_kwh)} kWh</span>` : "";
       return `
         <div class="adv-day${isTarget ? " best" : ""}" title="${d.window ? "Beste Zeit: " + d.window : ""}">
-          ${isTarget ? `<span class="adv-badge">${v.type === "wait" ? "Empfehlung" : "Heute"}</span>` : ""}
+          ${isTarget ? `<span class="adv-badge">Empfehlung</span>` : ""}
           <span class="adv-label">${d.label}</span>
           ${iconSvg(d.icon, d.icon === "sun" || d.icon === "partly" ? "var(--c-pv)" : "var(--muted)")}
           <span class="adv-kwh">${kwh}</span>
+          ${todaySplit}
           <span class="adv-pop">${d.temp_max != null ? d.temp_max + "°" : ""}${d.pop > 15 ? ` · ${d.pop} %☂` : ""}</span>
           <span class="adv-meter"><i style="width:${d.rel}%"></i></span>
         </div>`;
     }).join("");
+
+    const ctx = a.context || {};
+    const chips = [];
+    if (ctx.sunset && ctx.remaining_sun_h != null)
+      chips.push(`☀ noch ${nf1.format(ctx.remaining_sun_h)} h Sonne (bis ${ctx.sunset} Uhr)`);
+    if (ctx.remaining_today_kwh != null)
+      chips.push(`⚡ Rest-Erzeugung heute ≈ ${nf1.format(ctx.remaining_today_kwh)} kWh`);
+    if (ctx.surplus_kwh != null)
+      chips.push(`${ctx.surplus_kwh >= 0 ? "▲" : "▼"} Überschuss heute ≈ ${nf1.format(ctx.surplus_kwh)} kWh`);
+    if (ctx.calibration != null && ctx.cal_samples > 10 && Math.abs(ctx.calibration - 1) > 0.04)
+      chips.push(`⚙ kalibriert ×${nf2.format(ctx.calibration)}`);
+    const ctxRow = chips.length
+      ? `<div class="advisor-ctx">${chips.map((c) => `<span class="ctx-chip">${c}</span>`).join("")}</div>` : "";
 
     $("#advisor-body").innerHTML = `
       <div class="advisor-verdict">
@@ -540,8 +556,10 @@ const App = {
         <div>
           <div class="advisor-headline">${v.headline}</div>
           <div class="advisor-message">${v.message}</div>
+          ${ctxRow}
           <div class="advisor-hint">Empfehlung für stromintensive Geräte (Waschmaschine, Trockner,
-            Spülmaschine, E-Auto) auf Basis der PV-Prognose${a.kwp ? ` deiner ${nf1.format(a.kwp)}-kWp-Anlage` : ""}.</div>
+            Spülmaschine, E-Auto). Prognose aus Wetter + Sonnenstand${a.kwp ? ` für deine ${nf1.format(a.kwp)}-kWp-Anlage` : ""},
+            laufend an der realen Erzeugung kalibriert.</div>
         </div>
       </div>
       <div class="advisor-days">${dayTiles}</div>`;
