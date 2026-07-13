@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.6.1 – 2026-07-13
+
+- **Fix: „None kWh“ im Solar-Planer**, wenn die Anlagengröße (kWp) über die
+  Platform-API nicht auffindbar ist: Texte lassen die kWh-Angabe dann sauber
+  weg, und die kWp wird als Fallback aus der **beobachteten Spitzenleistung**
+  der Anlage gelernt (persistiert) – nach dem ersten sonnigen Mittag zeigen
+  die Kacheln damit wieder kWh statt Prozente. Die Selbstkalibrierung gleicht
+  die Restabweichung aus. Zusätzliche Feldnamen-Varianten für die
+  kWp-Erkennung.
+
 ## 1.6.0 – 2026-07-12
 
 - **Solar-Planer 2.0** – deutlich genauere Prognose:

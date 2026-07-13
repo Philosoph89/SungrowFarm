@@ -144,8 +144,9 @@ def plant_location(plants: list[dict], details: dict) -> tuple[float, float] | N
 def plant_kwp(plants: list[dict], details: dict) -> float | None:
     for src in [*plants, *details.values()]:
         v = _scan_number(src, ("total_capcity", "total_capacity", "design_capacity",
-                               "installed_power", "ps_capacity_kw"))
-        if v:
+                               "installed_power", "ps_capacity_kw", "ps_capacity",
+                               "install_capacity", "capacity", "total_energy"))
+        if v and 0.5 <= (v / 1000.0 if v > 1000 else v) <= 5000:
             return v / 1000.0 if v > 1000 else v
     return None
 
@@ -162,6 +163,7 @@ class SolarAdvisor:
         self.state_path = state_path
         self.calibration = 1.0     # learned plant factor (EWMA)
         self.cal_samples = 0
+        self.max_pv_w = 0.0        # highest observed PV power → kWp fallback
         self._load_state()
         self._cache: tuple[float, dict] | None = None
         self._session: aiohttp.ClientSession | None = None
@@ -175,6 +177,7 @@ class SolarAdvisor:
             state = json.loads(self.state_path.read_text())
             self.calibration = float(state.get("factor", 1.0))
             self.cal_samples = int(state.get("samples", 0))
+            self.max_pv_w = float(state.get("max_pv_w", 0.0))
         except (OSError, ValueError):
             pass
 
@@ -183,9 +186,21 @@ class SolarAdvisor:
             return
         try:
             self.state_path.write_text(json.dumps(
-                {"factor": round(self.calibration, 4), "samples": self.cal_samples}))
+                {"factor": round(self.calibration, 4), "samples": self.cal_samples,
+                 "max_pv_w": round(self.max_pv_w, 1)}))
         except OSError as err:
             _LOGGER.debug("Could not persist advisor state: %s", err)
+
+    def _effective_kwp(self) -> float | None:
+        """kWp from the plant metadata, or learned from the highest PV power
+        the plant has actually delivered (inverter clipping ≈ installed power;
+        the EWMA calibration absorbs the remaining bias)."""
+        kwp = plant_kwp(self.store.plants, self.store.plant_details)
+        if kwp:
+            return kwp
+        if self.max_pv_w > 800:
+            return round(self.max_pv_w * 1.05 / 1000.0, 1)
+        return None
 
     async def close(self) -> None:
         if self._session and not self._session.closed:
@@ -211,6 +226,11 @@ class SolarAdvisor:
     async def advise(self) -> dict:
         if not self.api_key:
             return {"configured": False}
+        # track the plant's peak output even on cache hits (kWp fallback)
+        pv_now = self._live().get("pv_power_w") or 0.0
+        if pv_now > self.max_pv_w:
+            self.max_pv_w = pv_now
+            self._save_state()
         if self._cache and time.time() - self._cache[0] < CACHE_SECONDS:
             return self._cache[1]
         loc = self._location()
@@ -249,7 +269,7 @@ class SolarAdvisor:
         now_local = datetime.now(tz)
         now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
         today = now_local.date()
-        kwp = plant_kwp(self.store.plants, self.store.plant_details)
+        kwp = self._effective_kwp()
         live = self._live()
 
         # --- nowcast + calibration from the plant's live output ------------
@@ -403,9 +423,11 @@ class SolarAdvisor:
 
         sun_info = ""
         if ctx["remaining_sun_h"] and ctx["sunset"]:
-            sun_info = (f" Bis Sonnenuntergang ({ctx['sunset']} Uhr, noch "
-                        f"{kwh(ctx['remaining_sun_h'])} h Sonne) werden noch ca. "
-                        f"{kwh(ctx['remaining_today_kwh'])} kWh erwartet.")
+            sun_info = (f" Bis Sonnenuntergang ({ctx['sunset']} Uhr) bleiben noch "
+                        f"{kwh(ctx['remaining_sun_h'])} h Sonne")
+            if ctx["remaining_today_kwh"] is not None:
+                sun_info += f" – erwartet: ca. {kwh(ctx['remaining_today_kwh'])} kWh"
+            sun_info += "."
 
         # 1. the plant is running a surplus right now with a healthy battery
         if surplus_now and (soc is None or soc >= 60):
