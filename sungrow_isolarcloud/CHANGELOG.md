@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.7.0 – 2026-07-13
+
+- **Solar-Planer als MQTT-Sensoren** – für Automationen:
+  - `binary_sensor.sungrow_<id>_planner_run` – ON, wenn Einschalten heute
+    lohnt (Verdikt „now“ oder „today“) → ideal als Bedingung/Trigger
+  - `sensor.sungrow_<id>_planner_verdict` – now / today / wait, mit
+    Attributen (Begründung, empfohlener Tag + Zeitfenster, Tagesprognosen,
+    Sonnenuntergang, Kalibrierung)
+  - `sensor.sungrow_<id>_planner_surplus_today` (kWh),
+    `…_planner_remaining_today` (kWh), `…_planner_sun_hours_remaining` (h),
+    `…_planner_best_day`
+  - Veröffentlichung mit jedem Poll-Zyklus (Prognose intern 15 min gecacht,
+    das OpenWeather-Kontingent bleibt geschont)
+
 ## 1.6.1 – 2026-07-13
 
 - **Fix: „None kWh“ im Solar-Planer**, wenn die Anlagengröße (kWp) über die

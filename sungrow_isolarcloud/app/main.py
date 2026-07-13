@@ -85,6 +85,8 @@ else:
     else:
         _LOGGER.info("Solar planner disabled – no OpenWeather API key configured")
 
+poller.advisor = advisor
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

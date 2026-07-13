@@ -21,10 +21,11 @@ STRUCTURE_REFRESH_EVERY = 12  # poll cycles
 
 
 class Poller:
-    def __init__(self, client, store: Store, mqtt: MqttPublisher):
+    def __init__(self, client, store: Store, mqtt: MqttPublisher, advisor=None):
         self.client = client
         self.store = store
         self.mqtt = mqtt
+        self.advisor = advisor
         self._cycle = 0
         self._device_poll_failed_types: set[tuple[str, int]] = set()
 
@@ -76,6 +77,21 @@ class Poller:
                 self.store.update_points(ps_id, rows)
             await self._poll_battery_devices(ps_id)
         await self.mqtt.publish_all()
+        await self._publish_advisor()
+
+    async def _publish_advisor(self) -> None:
+        """Publish the solar planner verdict as MQTT entities (15-min cached
+        in the advisor, so 5-min polls don't hit OpenWeather every time)."""
+        if not self.advisor or not self.store.plants:
+            return
+        try:
+            advice = await self.advisor.advise()
+        except Exception as err:  # noqa: BLE001 – planner must never break polling
+            _LOGGER.debug("Advisor for MQTT failed: %s", err)
+            return
+        if advice.get("configured") and not advice.get("error") and advice.get("verdict"):
+            ps_id = str(self.store.plants[0].get("ps_id"))
+            await self.mqtt.publish_advisor(ps_id, advice)
 
     async def _poll_battery_devices(self, ps_id: str) -> None:
         """Device-level battery/grid/load points (13xxx) – residential plants

@@ -65,6 +65,37 @@ voller Batterie, heißt es „sofort einschalten“. API-Key anlegen:
 auf openweathermap.org registrieren → „API keys“ → Key kopieren →
 Add-on-Option `openweather_api_key`.
 
+### Planer-Sensoren für Automationen
+
+Der Planer wird auch als MQTT-Entitäten veröffentlicht:
+
+| Entität | Bedeutung |
+|---|---|
+| `binary_sensor.sungrow_<id>_planner_run` | **ON**, wenn Einschalten heute lohnt (Verdikt now/today) |
+| `sensor.sungrow_<id>_planner_verdict` | `now` / `today` / `wait` + Attribute (Begründung, Tagesprognosen, Zeitfenster) |
+| `sensor.sungrow_<id>_planner_surplus_today` | erwarteter Überschuss heute (kWh) |
+| `sensor.sungrow_<id>_planner_remaining_today` | erwartete Rest-Erzeugung heute (kWh) |
+| `sensor.sungrow_<id>_planner_sun_hours_remaining` | verbleibende Sonnenstunden |
+| `sensor.sungrow_<id>_planner_best_day` | empfohlener Tag (heute/morgen/…) |
+
+Beispiel-Automation (Waschmaschinen-Steckdose nur bei Solar-Empfehlung freigeben):
+
+```yaml
+automation:
+  - alias: "Waschmaschine bei Solarüberschuss freigeben"
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.sungrow_1234567_planner_run
+        to: "on"
+    condition:
+      - condition: numeric_state
+        entity_id: sensor.sungrow_1234567_planner_surplus_today
+        above: 2
+    action:
+      - service: switch.turn_on
+        target: { entity_id: switch.waschmaschine_steckdose }
+```
+
 Verwendet wird ausschließlich der **kostenlose 5-Tage/3-Stunden-Forecast**
 (`/data/2.5/forecast`) – kein One-Call-Abo, keine Hourly/Daily-APIs nötig.
 Das Add-on fragt höchstens alle 30 Minuten ab. Hinweis: Frisch erstellte
